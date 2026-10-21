@@ -87,7 +87,7 @@ There is no anonymous signup path. Someone without a registered account and an a
 - A session from another family cannot inspect or approve the request.
 - Approval activates one session; repeat polls and repeat approvals do not create extra sessions.
 - Logout revokes the API session, and an old token stops working.
-- Members can manage only their own family's membership, and events remain private to their owner.
+- Members can manage only their own family's membership and view events created by anyone in that family. Only the event creator can edit or delete it. Other families cannot access those events.
 - The frontend's network requests target the production Worker, never localhost.
 - No login or account is created by deployment itself.
 

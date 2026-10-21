@@ -1,6 +1,12 @@
+import type { ScheduleEvent } from './events';
+
 export interface User { id: string; username: string; familyId: string; }
 export interface Family { id: string; name: string; }
 export interface Identity { user: User; family: Family; }
+export interface ScheduleRecord extends ScheduleEvent {
+  createdBy: Pick<User, 'id' | 'username'>;
+  canEdit: boolean;
+}
 export interface LoginChallenge {
   id: string;
   pollToken: string;
@@ -21,4 +27,5 @@ export type LoginStatus = { status: 'pending' | 'approved' | 'expired' };
 // GET /api/me -> Identity; POST /api/auth/logout -> { ok: true }.
 // GET /api/family -> { family: Family, members: User[] }.
 // POST /api/family/members { username } -> { user: User }.
-// Schedules use /api/schedules and /api/schedules/:id, owned by authenticated user ID.
+// Schedules use /api/schedules and /api/schedules/:id.
+// Family members can read each other's schedules; only the creator can edit or delete.

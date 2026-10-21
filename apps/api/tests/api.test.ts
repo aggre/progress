@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import type { LoginChallenge, Identity } from '@little/shared/api';
+import type { LoginChallenge, Identity, ScheduleRecord } from '@little/shared/api';
 
 const origin='http://127.0.0.1:4321';
 let script:string;
@@ -98,8 +98,8 @@ test('same-family approval works across users, is idempotent, and cannot reactiv
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
 });
 
-test('cross-family approvals are denied and schedules stay private even among family members',async(t)=>{
- const f=await fixture(t),first=await f.challenge('first-user');await f.bootstrap(first,'first-user');
+test('family members share existing and new schedules while only creators can change them',async(t)=>{
+ const f=await fixture(t),first=await f.challenge('first-user');const owner=await f.bootstrap(first,'first-user');
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
  const outsider=await f.challenge('outsider-user'),familyId=randomUUID(),userId=randomUUID();
@@ -111,18 +111,53 @@ test('cross-family approvals are denied and schedules stay private even among fa
  const attempt=await f.challenge('family-member');
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${attempt.id}/${action}`,'POST',{approvalToken:attempt.approvalToken},outsider.sessionToken)).status,404);
  assert.equal((await f.request('/api/me','GET',undefined,attempt.sessionToken)).status,401);
- const event={title:'Private event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
+ const event={title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
  const created=await f.request('/api/schedules','POST',event,first.sessionToken);assert.equal(created.status,201);
- const saved=await created.json() as {event:{id:string}};
+ const saved=await created.json() as {event:ScheduleRecord};
+ assert.equal(saved.event.createdBy.username,'first-user');assert.equal(saved.event.canEdit,true);
+ const shared=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};
+ assert.equal(shared.events.length,1);assert.equal(shared.events[0].id,saved.event.id);
+ assert.deepEqual(shared.events[0].createdBy,saved.event.createdBy);assert.equal(shared.events[0].canEdit,false);
+ // The legacy alias has the same sharing and permission rules.
+ assert.deepEqual(await (await f.request('/api/events','GET',undefined,member.sessionToken)).json(),shared);
+ assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,outsider.sessionToken)).json(),{events:[]});
+ assert.deepEqual(await (await f.request('/api/schedules?familyId='+owner.familyId,'GET',undefined,outsider.sessionToken)).json(),{events:[]});
  for(const token of [member.sessionToken,outsider.sessionToken]){
-  assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,token)).json(),{events:[]});
-  assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Stolen'},token)).status,404);
+  assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Stolen',canEdit:true},token)).status,404);
   assert.equal((await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,token)).status,404);
  }
  assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,color:'red'},first.sessionToken)).status,400);
- assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken)).status,200);
- const owned=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:{title:string}[]};assert.equal(owned.events[0].title,'Updated');
+ const updated=await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken);
+ assert.equal(updated.status,200);assert.equal(((await updated.json()) as {event:ScheduleRecord}).event.canEdit,true);
+ const owned=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
+ assert.equal(owned.events[0].title,'Updated');assert.equal(owned.events[0].canEdit,true);
+ const refreshed=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};assert.equal(refreshed.events[0].title,'Updated');
+ // Member-created events are shared in the opposite direction, too.
+ const memberCreated=await f.request('/api/schedules','POST',{...event,title:'Member event'},member.sessionToken);assert.equal(memberCreated.status,201);
+ const memberEvent=((await memberCreated.json()) as {event:ScheduleRecord}).event;
+ assert.equal(memberEvent.canEdit,true);assert.equal(memberEvent.createdBy.username,'family-member');
+ const combined=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
+ assert.equal(combined.events.length,2);assert.equal(combined.events.find(e=>e.id===memberEvent.id)?.canEdit,false);
+ assert.equal((await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,first.sessionToken)).status,404);
  assert.equal((await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,first.sessionToken)).status,200);
+ assert.equal((await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,member.sessionToken)).status,200);
+ assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json(),{events:[]});
+});
+
+test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
+ const f=await fixture(t),first=await f.challenge('first-user');const owner=await f.bootstrap(first,'first-user');
+ const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
+ const member=((await added.json()) as {user:Identity['user']}).user;
+ await f.db.prepare(`WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<501)
+  INSERT INTO events (id,owner_id,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at)
+  SELECT 'existing-'||n, CASE WHEN n<=500 THEN ? ELSE ? END, 'Existing '||n, '🌿', '#7ba989',
+   '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', 'none', 1, 'UTC', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
+  FROM numbers`).bind(owner.userId,member.id).run();
+ const result=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
+ assert.equal(result.events.length,501);assert.equal(result.events.filter(e=>e.canEdit).length,500);
+ assert.equal(result.events.find(e=>e.createdBy.id===member.id)?.canEdit,false);
+ // Sharing does not increase a creator's write quota.
+ assert.equal((await f.request('/api/schedules','POST',result.events[0],first.sessionToken)).status,409);
 });
 
 test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{

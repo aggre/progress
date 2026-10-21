@@ -72,5 +72,5 @@ The intended project URL is `https://aggre.github.io/progress/`. GitHub Pages se
 - One-time countdowns with a configurable start date, or repetition every N minutes, hours, days, weeks, months, or years.
 - Event-specific IANA time zones. Calendar repeats follow local daylight-saving changes.
 - Month-end and leap-day dates remain anchored: January 31 becomes February 28, then March 31; February 29 returns in leap years.
-- Individual events belong to a user. Family membership authorizes login approval and member management; it does not share another member's schedule.
+- Events are shared with everyone in the creator's family. Only the creator can edit or delete an event. Family membership also authorizes login approval and member management.
 - Progress updates run in the browser. Only login approval polls the API; countdown ticks do not read D1.

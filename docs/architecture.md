@@ -15,7 +15,7 @@ The monorepo separates three concerns: `apps/web` owns the static interface, `ap
 
 Each user belongs to exactly one family. Family membership is assigned by the server; the member creation request contains a username, not a selectable family ID. An authenticated member can add another account to that member's family. There is no public registration route.
 
-Families determine who can approve a login. Events remain individually owned and every event query is scoped to the authenticated user ID. Another family member cannot read or modify the target user's schedule by knowing its event ID.
+Families determine who can approve a login and see shared schedules. Event reads join the creator's user record and match its family to the authenticated user's family. Existing events are shared automatically, without copying or changing ownership. Responses identify the creator and include a viewer-specific `canEdit` flag. Only the creator can update or delete an event; the API enforces this by authenticated user ID. Other families and anonymous visitors cannot read the schedule.
 
 The initial database has no users or sessions. Entering a username creates a pending login challenge, not an account. Only a control-plane operator action can create the first user and family while approving an existing pending challenge. Once that first account exists, bootstrap cannot create another first account.
 

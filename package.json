@@ -18,14 +18,25 @@
     "db:local": "wrangler d1 migrations apply DB --local --config apps/api/wrangler.jsonc --env development",
     "db:remote": "wrangler d1 migrations apply DB --remote --config apps/api/wrangler.jsonc",
     "bootstrap": "node scripts/bootstrap.mjs",
-    "deploy:api": "npm run deploy -w @little/api"
+    "deploy:api": "npm run deploy -w @little/api",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:report": "eslint . --format json --output-file work/eslint-report.json"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.5",
+    "@types/ramda": "^0.32.0",
     "esbuild": "^0.28.2",
+    "eslint": "^10.13.0",
+    "eslint-plugin-astro": "^3.2.1",
+    "eslint-plugin-functional": "^10.0.1",
+    "eslint-plugin-svelte": "^3.23.1",
+    "globals": "^17.13.0",
     "miniflare": "latest",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.0",
     "wrangler": "^4.151.3"
   }
 }

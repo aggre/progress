@@ -58,6 +58,12 @@ npm run build
 
 `npm run build:web` produces only `apps/web/dist`, the GitHub Pages artifact. `npm run build:api` validates and bundles the separate Worker without deploying it. Neither build deploys resources or upgrades a plan.
 
+Run `npm run lint` separately for the strict functional programming rules. Existing
+lint errors are tracked for later cleanup; lint is not part of CI or the commands
+above. `npm run lint:report` writes a JSON report to `work/eslint-report.json`.
+See [functional programming and linting](docs/linting.md) for the shared root
+configuration, Web overrides, and Ramda usage.
+
 ## Deployment
 
 - Frontend: GitHub Actions builds the web workspace on changes to `main`, then deploys to GitHub Pages. The committed API origin is `https://little-by-little-api.aggre-progress.workers.dev`; the optional `PUBLIC_API_BASE_URL` repository variable overrides it. Invalid production configuration fails the workflow.

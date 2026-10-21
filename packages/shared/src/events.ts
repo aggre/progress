@@ -1,4 +1,5 @@
 import { Temporal } from '@js-temporal/polyfill';
+import { clamp } from 'ramda';
 export const units = ['none', 'minute', 'hour', 'day', 'week', 'month', 'year'] as const;
 export type RepeatUnit = typeof units[number];
 export interface ScheduleEvent {
@@ -44,7 +45,7 @@ export function cycle(event: EventInput, now: number) {
       start = at(lo); end = at(hi);
     }
   }
-  const progress = Math.max(0, Math.min(100, (now - start) / (end - start) * 100));
+  const progress = clamp(0, 100, (now - start) / (end - start) * 100);
   return { start, end, progress, remaining: Math.max(0, end - now), complete: event.repeatUnit === 'none' && now >= end, upcoming: now < start };
 }
 export function remainingText(ms: number): string {

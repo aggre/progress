@@ -21,4 +21,4 @@ export type LoginStatus = { status: 'pending' | 'approved' | 'expired' };
 // GET /api/me -> Identity; POST /api/auth/logout -> { ok: true }.
 // GET /api/family -> { family: Family, members: User[] }.
 // POST /api/family/members { username } -> { user: User }.
-// Events retain /api/events and /api/events/:id, owned by authenticated user ID.
+// Schedules use /api/schedules and /api/schedules/:id, owned by authenticated user ID.

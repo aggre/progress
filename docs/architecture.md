@@ -72,3 +72,5 @@ The API uses the existing D1 database through its native Worker binding. The arc
 Approval and bootstrap transitions must be atomic: a challenge activates at most one session, and concurrent bootstrap attempts create at most one first account. Login secrets are bounded and stored as hashes, pending requests expire, login creation and polling are rate limited, and logout revokes the active session server-side.
 
 Countdowns continue to use the shared recurrence calculations. Their one-second UI updates do not generate API polling or database reads.
+
+The schedule resource uses `/api/schedules`. The previous `/api/events` route remains a compatibility alias for older bundles. EasyPrivacy matches `workers.dev/api/event`, so using that route for application schedules can cause Brave to block legitimate requests.

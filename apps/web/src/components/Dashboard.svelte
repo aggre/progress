@@ -51,7 +51,7 @@
   function notify(message: string) { toast=message; clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast='',4000); }
   async function load() {
     error='';
-    try { const result = await api<{ events: ScheduleEvent[] }>('/api/events'); events=result.events; } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
+    try { const result = await api<{ events: ScheduleEvent[] }>('/api/schedules'); events=result.events; } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
     finally { loading=false; }
   }
   onMount(()=>{
@@ -76,19 +76,19 @@
       const targetAt=fromLocal(targetLocal,zone);
       const startAt=repeatUnit === 'none' ? fromLocal(startLocal,zone) : new Date(shift(targetAt,zone,repeatUnit,-repeatEvery)).toISOString();
       const input: EventInput = {title,emoji,color,targetAt,startAt,repeatUnit,repeatEvery,timeZone:zone};
-      const result=await api<{ event: ScheduleEvent }>(`/api/events${editing ? '/'+editing.id : ''}`,editing ? 'PUT' : 'POST',input);
+      const result=await api<{ event: ScheduleEvent }>(`/api/schedules${editing ? '/'+editing.id : ''}`,editing ? 'PUT' : 'POST',input);
       events=editing ? events.map(e=>e.id===editing?.id ? result.event : e) : [...events,result.event];
       dialog.close();notify(editing ? 'Event updated.' : 'A little something to look forward to.');
     } catch(e) { formError=e instanceof Error ? e.message : 'Unable to save.'; } finally { saving=false; }
   }
   async function remove() {
     if (!deleteEvent || saving) return; saving=true; formError='';
-    try { await api('/api/events/'+deleteEvent.id,'DELETE');events=events.filter(e=>e.id!==deleteEvent?.id);deleteDialog.close();notify('Event deleted.'); }
+    try { await api('/api/schedules/'+deleteEvent.id,'DELETE');events=events.filter(e=>e.id!==deleteEvent?.id);deleteDialog.close();notify('Event deleted.'); }
     catch(e) {formError=e instanceof Error ? e.message : 'Unable to delete.';}finally{saving=false;}
   }
   async function seed() {
     seeding=true;error='';
-    try { for (const input of starterEvents('Asia/Tokyo')) { const result=await api<{ event: ScheduleEvent }>('/api/events','POST',input);events=[...events,result.event]; } notify('Your everyday countdowns are ready.'); }
+    try { for (const input of starterEvents('Asia/Tokyo')) { const result=await api<{ event: ScheduleEvent }>('/api/schedules','POST',input);events=[...events,result.event]; } notify('Your everyday countdowns are ready.'); }
     catch(e){error=e instanceof Error ? e.message : 'Unable to add starter events.';}finally{seeding=false;}
   }
   function exportEvents() {

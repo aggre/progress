@@ -33,6 +33,9 @@ app.post('/api/family/members',requireAuth,async c=>{
  }catch(e){if(e instanceof Error&&e.message.includes('UNIQUE'))return c.json({error:'That username is not available.'},409);throw e;}
  return c.json({user:{id,username:name,familyId:identity.family.id}},201);
 });
+// Use a schedule-specific path; /api/events on workers.dev matches EasyPrivacy.
+app.route('/api/schedules',events);
+// Retain the old route while existing browser bundles refresh.
 app.route('/api/events',events);
 app.notFound(c=>c.json({error:'Not found.'},404));
 app.onError((error,c)=>{console.error(JSON.stringify({event:'request_failed',type:error.name}));return c.json({error:'Something went wrong. Please try again.'},500);});

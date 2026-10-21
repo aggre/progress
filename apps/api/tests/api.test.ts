@@ -32,7 +32,8 @@ async function fixture(t:TestContext){
 test('empty installation exposes no app data and has no public registration or bootstrap route',async(t)=>{
  const f=await fixture(t);
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
- for(const path of ['/api/me','/api/events','/api/family'])assert.equal((await f.request(path)).status,401);
+ assert.equal((await f.request('/api/events')).status,401); // Previous browser bundles stay protected.
+ for(const path of ['/api/me','/api/schedules','/api/family'])assert.equal((await f.request(path)).status,401);
  assert.equal((await f.request('/api/family/members','POST',{username:'new-user'})).status,401);
  for(const path of ['/api/auth/register','/api/auth/bootstrap','/api/register','/api/bootstrap'])assert.equal((await f.request(path,'POST',{username:'new-user'})).status,404);
  const c=await f.challenge('unknown-user');
@@ -111,17 +112,17 @@ test('cross-family approvals are denied and schedules stay private even among fa
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${attempt.id}/${action}`,'POST',{approvalToken:attempt.approvalToken},outsider.sessionToken)).status,404);
  assert.equal((await f.request('/api/me','GET',undefined,attempt.sessionToken)).status,401);
  const event={title:'Private event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
- const created=await f.request('/api/events','POST',event,first.sessionToken);assert.equal(created.status,201);
+ const created=await f.request('/api/schedules','POST',event,first.sessionToken);assert.equal(created.status,201);
  const saved=await created.json() as {event:{id:string}};
  for(const token of [member.sessionToken,outsider.sessionToken]){
-  assert.deepEqual(await (await f.request('/api/events','GET',undefined,token)).json(),{events:[]});
-  assert.equal((await f.request('/api/events/'+saved.event.id,'PUT',{...event,title:'Stolen'},token)).status,404);
-  assert.equal((await f.request('/api/events/'+saved.event.id,'DELETE',undefined,token)).status,404);
+  assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,token)).json(),{events:[]});
+  assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Stolen'},token)).status,404);
+  assert.equal((await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,token)).status,404);
  }
- assert.equal((await f.request('/api/events/'+saved.event.id,'PUT',{...event,color:'red'},first.sessionToken)).status,400);
- assert.equal((await f.request('/api/events/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken)).status,200);
- const owned=await (await f.request('/api/events','GET',undefined,first.sessionToken)).json() as {events:{title:string}[]};assert.equal(owned.events[0].title,'Updated');
- assert.equal((await f.request('/api/events/'+saved.event.id,'DELETE',undefined,first.sessionToken)).status,200);
+ assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,color:'red'},first.sessionToken)).status,400);
+ assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken)).status,200);
+ const owned=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:{title:string}[]};assert.equal(owned.events[0].title,'Updated');
+ assert.equal((await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,first.sessionToken)).status,200);
 });
 
 test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
@@ -162,7 +163,8 @@ test('origin checks, request bounds, malformed input and login rate limits are e
 test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
  const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
  const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);
- assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});assert.equal(await unclaimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
+ assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});
+ assert.deepEqual(await (await unclaimed.request('/api/schedules','GET',undefined,c.sessionToken)).json(),{events:[]});assert.equal(await unclaimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
  const claimed=await fixture(t);await insertLegacy(claimed);const d=await claimed.challenge('first-user');await claimed.bootstrap(d,'first-user',1);
- const visible=await (await claimed.request('/api/events','GET',undefined,d.sessionToken)).json() as {events:{title:string}[]};assert.equal(visible.events[0].title,'Preserved legacy event');assert.equal(await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
+ const visible=await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json() as {events:{title:string}[]};assert.equal(visible.events[0].title,'Preserved legacy event');assert.equal(await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
 });

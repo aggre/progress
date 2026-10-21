@@ -70,6 +70,16 @@
     targetLocal=toLocal(event?.targetAt || new Date(Date.now()+86400000*7).toISOString(),zone);
     dialog.showModal(); await tick(); nameInput?.focus();
   }
+  function getRepeatChoice(): RepeatUnit | 'two-weeks' {
+    return repeatUnit === 'week' && repeatEvery === 2 ? 'two-weeks' : repeatUnit;
+  }
+  function setRepeatChoice(choice: RepeatUnit | 'two-weeks') {
+    if (choice === 'two-weeks') { repeatUnit = 'week'; repeatEvery = 2; }
+    else {
+      if (getRepeatChoice() === 'two-weeks') repeatEvery = 1;
+      repeatUnit = choice;
+    }
+  }
   async function save(event: SubmitEvent) {
     event.preventDefault(); if (saving) return; saving=true;formError='';
     try {
@@ -139,7 +149,7 @@
     <div class="form-grid name-row"><label>Emoji<input class="emoji-input" bind:value={emoji} required maxlength="32" aria-label="Event emoji"/></label><label>Event name<input bind:this={nameInput} bind:value={title} placeholder="Something to look forward to" required maxlength="100"/></label></div>
     <div class="emoji-picker" aria-label="Choose an emoji">{#each emojis as item}<button type="button" class:selected={emoji===item} aria-label={`Use ${item}`} aria-pressed={emoji===item} onclick={()=>emoji=item}>{item}</button>{/each}</div>
     <label class="field-label">Target date & time<input type="datetime-local" bind:value={targetLocal} required min="1900-01-01T00:00" max="2200-12-31T23:59"/></label>
-    <div class="form-grid repeat-row"><label>Repeats<select aria-label="Repeats" bind:value={repeatUnit}>{#each units as unit}<option value={unit}>{unit==='none' ? 'Does not repeat' : `Every ${unit}`}</option>{/each}</select></label>{#if repeatUnit!=='none'}<label>Every<input type="number" bind:value={repeatEvery} min="1" max="1000" required aria-label="Repeat interval"/></label>{/if}</div>
+    <div class="form-grid repeat-row"><label>Repeats<select aria-label="Repeats" bind:value={getRepeatChoice, setRepeatChoice}>{#each units as unit}<option value={unit}>{unit==='none' ? 'Does not repeat' : `Every ${unit}`}</option>{#if unit==='week'}<option value="two-weeks">Every 2 weeks</option>{/if}{/each}</select></label>{#if repeatUnit!=='none'}<label>Every<input type="number" bind:value={repeatEvery} min="1" max="1000" required aria-label="Repeat interval"/></label>{/if}</div>
     {#if repeatUnit==='none'}<label class="field-label">Progress starts<input type="datetime-local" bind:value={startLocal} required min="1900-01-01T00:00" max="2200-12-31T23:59"/></label>{:else}<p class="field-hint">The bar fills from the previous occurrence to the next, then starts again. Month-end dates stay anchored.</p>{/if}
     <label class="field-label">Time zone<select aria-label="Time zone" bind:value={zone}>{#each timeZones as tz}<option value={tz}>{tz.replaceAll('_',' ')}</option>{/each}</select></label><p class="field-hint">Dates use this time zone. Daylight-saving changes follow the local clock.</p>
     <fieldset class="color-field"><legend>Make it your color</legend><div class="color-picker">{#each palette as swatch}<button type="button" class:color-selected={color===swatch} style={`--swatch:${swatch}`} aria-label={`Use color ${swatch}`} aria-pressed={color===swatch} onclick={()=>color=swatch}>{color===swatch ? '✓' : ''}</button>{/each}<label class="custom-color" title="Choose any color"><input type="color" bind:value={color} aria-label="Custom bar color"/><span>＋</span></label></div></fieldset>

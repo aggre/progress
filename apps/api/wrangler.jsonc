@@ -1,0 +1,13 @@
+{
+  "$schema":"../../node_modules/wrangler/config-schema.json",
+  "name":"little-by-little-api",
+  "main":"src/index.ts",
+  "compatibility_date":"2026-10-21",
+  "compatibility_flags":["nodejs_compat"],
+  "workers_dev":true,
+  "vars":{"FRONTEND_ORIGIN":"https://aggre.github.io","APP_BASE_URL":"https://aggre.github.io/progress/"},
+  "d1_databases":[{"binding":"DB","database_name":"little-by-little","database_id":"d4f17e24-6359-4310-9a56-44f793c34f7c","migrations_dir":"migrations"}],
+  "observability":{"enabled":true,"head_sampling_rate":1,"logs":{"enabled":true,"invocation_logs":false}},
+  "triggers":{"crons":["17 3 * * *"]},
+  "env":{"development":{"name":"little-by-little-api-dev","vars":{"FRONTEND_ORIGIN":"http://127.0.0.1:4321","APP_BASE_URL":"http://127.0.0.1:4321/"},"d1_databases":[{"binding":"DB","database_name":"little-by-little","database_id":"d4f17e24-6359-4310-9a56-44f793c34f7c","migrations_dir":"migrations"}]}}
+}

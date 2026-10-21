@@ -1,0 +1,1 @@
+{"name":"@little/shared","version":"2.0.0","private":true,"type":"module","exports":{"./events":"./src/events.ts","./api":"./src/api.ts"},"dependencies":{"@js-temporal/polyfill":"^0.5.1"}}

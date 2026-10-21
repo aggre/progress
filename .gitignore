@@ -4,4 +4,6 @@ dist/
 .wrangler/
 .dev.vars
 .env*
+!.env.example
 work/
+apps/api/worker-configuration.d.ts

@@ -1,31 +1,29 @@
 {
   "name": "little-by-little",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "npm run build && wrangler pages dev dist --binding LOCAL_DEV=true --ip 127.0.0.1",
-    "build": "astro build && node scripts/build-worker.mjs && node scripts/package-source.mjs",
-    "check": "astro check && svelte-check --tsconfig ./tsconfig.json",
-    "test": "tsx --test tests/*.test.ts",
-    "preview": "wrangler pages dev dist --binding LOCAL_DEV=true --ip 127.0.0.1",
-    "db:local": "wrangler d1 migrations apply DB --local",
-    "deploy": "npm run build && wrangler pages deploy dist --branch main",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@astrojs/svelte": "^9.1.0",
-    "@js-temporal/polyfill": "^0.5.1",
-    "astro": "^7.4.1",
-    "jose": "^6.2.13",
-    "svelte": "^5.57.2"
+    "dev:web": "npm run dev -w @little/web",
+    "dev:api": "npm run dev -w @little/api",
+    "build": "npm run build -w @little/web && npm run build -w @little/api",
+    "build:web": "npm run build -w @little/web",
+    "build:api": "npm run build -w @little/api",
+    "check": "npm run check --workspaces --if-present && tsc --noEmit -p packages/shared/tsconfig.json",
+    "test": "tsx --test tests/*.test.ts apps/api/tests/*.test.ts",
+    "db:local": "wrangler d1 migrations apply DB --local --config apps/api/wrangler.jsonc --env development",
+    "db:remote": "wrangler d1 migrations apply DB --remote --config apps/api/wrangler.jsonc",
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "deploy:api": "npm run deploy -w @little/api"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.11",
     "@types/node": "^26.6.5",
     "esbuild": "^0.28.2",
-    "fflate": "^0.8.3",
-    "svelte-check": "^4.7.7",
+    "miniflare": "latest",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "wrangler": "^4.151.3"

@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "little-by-little-aggre",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-21",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "morning-wildflower-98d1.cloudflareaccess.com",
+    "ACCESS_AUD": "e883ad53762c905f0f30bcc2c318e331ce977781799095dc87f184f051132843",
+    "ALLOWED_EMAIL": "hiroyuki.aggre@gmail.com",
+    "LOCAL_DEV": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "little-by-little",
+      "database_id": "d4f17e24-6359-4310-9a56-44f793c34f7c",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

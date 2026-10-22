@@ -8,7 +8,13 @@ import type { AppEnv,ApiBindings } from './types';
 const app=new Hono<AppEnv>();
 app.use('*',async(c,next)=>{
  const origin=c.req.header('Origin');
- c.header('Cache-Control','no-store');c.header('X-Content-Type-Options','nosniff');c.header('Referrer-Policy','no-referrer');
+ // eslint-disable-next-line functional/no-expression-statements -- Write the HTTP response cache policy at the Hono response boundary.
+ c.header('Cache-Control','no-store');
+ // eslint-disable-next-line functional/no-expression-statements -- Write the HTTP content-sniffing protection at the Hono response boundary.
+ c.header('X-Content-Type-Options','nosniff');
+ // eslint-disable-next-line functional/no-expression-statements -- Write the HTTP referrer policy at the Hono response boundary.
+ c.header('Referrer-Policy','no-referrer');
+ // eslint-disable-next-line functional/no-expression-statements -- Write the HTTP cache variation header for the request origin.
  c.header('Vary','Origin');
  if(origin&&origin!==c.env.FRONTEND_ORIGIN)return c.json({error:'Request origin not allowed.'},403);
  if(origin){c.header('Access-Control-Allow-Origin',origin);c.header('Access-Control-Allow-Headers','Content-Type, Authorization');c.header('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS');c.header('Access-Control-Max-Age','600');}

@@ -36,7 +36,9 @@ const parsed=args.reduce(
 );
 /** @type {Readonly<Record<string, string | boolean | undefined>>} */
 const parsedOptions=parsed.options;
-if(!!parsedOptions['--remote']===!!parsedOptions['--local'])fail('Choose exactly one of --local or --remote.');
+const mode=!!parsedOptions['--remote']===!!parsedOptions['--local']
+ ? fail('Choose exactly one of --local or --remote.')
+ : parsedOptions['--remote']?'--remote':'--local';
 /** @param {string} value */
 const literal=value=>"'"+value.replaceAll("'","''")+"'";
 const id=parsedOptions['--challenge'],rawName=parsedOptions['--username'],family=parsedOptions['--family']||'My family';
@@ -56,11 +58,12 @@ const temp=await mkdtemp(resolve(root,'work/bootstrap-')),file=resolve(temp,'ope
 await writeFile(file,sql,{mode:0o600});
 // eslint-disable-next-line functional/no-try-statements -- Always remove the temporary SQL and directory after invoking Wrangler, including failures.
 try{
- const command=[resolve(root,'node_modules/wrangler/bin/wrangler.js'),'d1','execute','DB','--config',resolve(root,'apps/api/wrangler.jsonc'),parsedOptions['--remote']?'--remote':'--local','--file',file,...(parsedOptions['--local']?['--env','development']:[])];
+ const command=[resolve(root,'node_modules/wrangler/bin/wrangler.js'),'d1','execute','DB','--config',resolve(root,'apps/api/wrangler.jsonc'),mode,'--file',file,...(parsedOptions['--local']?['--env','development']:[])];
  // eslint-disable-next-line functional/prefer-immutable-types -- The native subprocess result contains mutable process buffers at this CLI boundary.
  const result=spawnSync(process.execPath,command,{cwd:root,stdio:'inherit'});
- if(result.error)fail(result.error.message);
- if(result.status!==0)process.exitCode=result.status||1;
+ const status=result.error ? fail(result.error.message) : result.status;
+ // eslint-disable-next-line functional/no-expression-statements, functional/immutable-data -- Propagate the Wrangler subprocess failure through the CLI process exit status.
+ if(status!==0)process.exitCode=status||1;
  else if(!parsedOptions['--list']){
   // eslint-disable-next-line functional/no-expression-statements -- Report the completed D1 approval to the operator through stdout.
   console.log('First-user approval completed. The original browser will finish login on its next poll.');

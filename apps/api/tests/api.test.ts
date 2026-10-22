@@ -108,7 +108,7 @@ test('family members share existing and new schedules while only creators can ch
   f.db.prepare('INSERT INTO users (id,username,family_id) VALUES (?,?,?)').bind(userId,'outsider-user',familyId),
   f.db.prepare("UPDATE login_challenges SET status='approved',approved_user_id=?,approved_at=unixepoch() WHERE id=?").bind(userId,outsider.id)
  ]);
- const attempt=await f.challenge('family-member');
+ const attempt:Readonly<LoginChallenge>=await f.challenge('family-member');
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${attempt.id}/${action}`,'POST',{approvalToken:attempt.approvalToken},outsider.sessionToken)).status,404);
  assert.equal((await f.request('/api/me','GET',undefined,attempt.sessionToken)).status,401);
  const event={title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
@@ -145,7 +145,7 @@ test('family members share existing and new schedules while only creators can ch
 });
 
 test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
- const f=await fixture(t),first=await f.challenge('first-user');const owner=await f.bootstrap(first,'first-user');
+ const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member=((await added.json()) as {user:Identity['user']}).user;
  await f.db.prepare(`WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<501)
@@ -161,18 +161,18 @@ test('family schedule reads include existing events beyond the former 500-event 
 });
 
 test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
- const f=await fixture(t),expired=await f.challenge('expired-user');
+ const f=await fixture(t),expired:Readonly<LoginChallenge>=await f.challenge('expired-user');
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(expired.id).run();
  assert.deepEqual(await (await f.request(`/api/auth/challenges/${expired.id}/poll`,'POST',{pollToken:expired.pollToken})).json(),{status:'expired'});
  await assert.rejects(f.bootstrap(expired,'expired-user'));assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
- const a=await f.challenge('candidate-alpha'),b=await f.challenge('candidate-bravo');
+ const a:Readonly<LoginChallenge>=await f.challenge('candidate-alpha'),b:Readonly<LoginChallenge>=await f.challenge('candidate-bravo');
  const results=await Promise.allSettled([f.bootstrap(a,'candidate-alpha'),f.bootstrap(b,'candidate-bravo')]);
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),1);assert.equal(await f.db.prepare('SELECT count(*) AS n FROM families').first('n'),1);
  const winner=results[0].status==='fulfilled'?a:b;
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n'),1);
  assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,200);
- const knownExpired=await f.challenge(results[0].status==='fulfilled'?'candidate-alpha':'candidate-bravo');
+ const knownExpired:Readonly<LoginChallenge>=await f.challenge(results[0].status==='fulfilled'?'candidate-alpha':'candidate-bravo');
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(knownExpired.id).run();
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${knownExpired.id}/${action}`,'POST',{approvalToken:knownExpired.approvalToken},winner.sessionToken)).status,404);
  assert.equal((await f.request('/api/me','GET',undefined,knownExpired.sessionToken)).status,401);
@@ -197,9 +197,9 @@ test('origin checks, request bounds, malformed input and login rate limits are e
 
 test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
  const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
- const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);
+ const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);
  assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});
  assert.deepEqual(await (await unclaimed.request('/api/schedules','GET',undefined,c.sessionToken)).json(),{events:[]});assert.equal(await unclaimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
- const claimed=await fixture(t);await insertLegacy(claimed);const d=await claimed.challenge('first-user');await claimed.bootstrap(d,'first-user',1);
+ const claimed=await fixture(t);await insertLegacy(claimed);const d:Readonly<LoginChallenge>=await claimed.challenge('first-user');await claimed.bootstrap(d,'first-user',1);
  const visible=await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json() as {events:{title:string}[]};assert.equal(visible.events[0].title,'Preserved legacy event');assert.equal(await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
 });

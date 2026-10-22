@@ -5,9 +5,9 @@ import { jsonObject, requireAuth, throttle } from './security';
 import type { AppEnv } from './types';
 
 interface Row {
-  id: string; owner_id: string; username: string; title: string; emoji: string; color: string;
-  start_at: string; target_at: string; repeat_unit: ScheduleEvent['repeatUnit']; repeat_every: number;
-  time_zone: string; created_at: string; updated_at: string;
+  readonly id: string; readonly owner_id: string; readonly username: string; readonly title: string; readonly emoji: string; readonly color: string;
+  readonly start_at: string; readonly target_at: string; readonly repeat_unit: ScheduleEvent['repeatUnit']; readonly repeat_every: number;
+  readonly time_zone: string; readonly created_at: string; readonly updated_at: string;
 }
 
 function map(r: Row, viewer: string): ScheduleRecord {

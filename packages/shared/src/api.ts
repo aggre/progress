@@ -17,7 +17,7 @@ export interface LoginChallenge {
   verificationCode: string;
 }
 export interface PendingApproval { readonly username: string; readonly verificationCode: string; readonly expiresAt: number; }
-export type LoginStatus = { status: 'pending' | 'approved' | 'expired' };
+export type LoginStatus = Readonly<{ status: 'pending' | 'approved' | 'expired' }>;
 // Public: POST /api/auth/challenges { username } -> LoginChallenge.
 // POST /api/auth/challenges/:id/poll { pollToken } -> LoginStatus.
 // Authenticated: POST /api/auth/challenges/:id/inspect { approvalToken } -> PendingApproval.

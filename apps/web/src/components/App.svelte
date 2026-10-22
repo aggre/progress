@@ -7,7 +7,7 @@
   import FamilyPanel from './FamilyPanel.svelte';
 
   type SavedChallenge = LoginChallenge & { username: string };
-  type ApprovalIntent = { id: string; approvalToken: string };
+  type ApprovalIntent = Readonly<{ id: string; approvalToken: string }>;
   let identity = $state<Identity | null>(null);
   let checking = $state(true);
   let username = $state('');

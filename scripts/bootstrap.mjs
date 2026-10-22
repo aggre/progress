@@ -19,9 +19,13 @@ function fail(message){
  process.exit(1);
 }
 for(let i=0;i<args.length;i++){
- const name=args[i];if(flags.has(name)){if(options[name])fail('Duplicate option: '+name);options[name]=true;}
- else if(values.has(name)){if(options[name]||!args[i+1]||args[i+1].startsWith('--'))fail('Missing or duplicate value: '+name);options[name]=args[++i];}
- else fail('Unknown option: '+name);
+ const name=args[i];
+ const value=flags.has(name)
+  ? options[name] ? fail('Duplicate option: '+name) : true
+  : values.has(name)
+   ? options[name]||!args[i+1]||args[i+1].startsWith('--') ? fail('Missing or duplicate value: '+name) : args[++i]
+   : fail('Unknown option: '+name);
+ options[name]=value;
 }
 /** @type {Readonly<Record<string, string | boolean | undefined>>} */
 const parsedOptions=options;
@@ -46,5 +50,8 @@ try{
  const result=spawnSync(process.execPath,command,{cwd:root,stdio:'inherit'});
  if(result.error)fail(result.error.message);
  if(result.status!==0)process.exitCode=result.status||1;
- else if(!parsedOptions['--list'])console.log('First-user approval completed. The original browser will finish login on its next poll.');
+ else if(!parsedOptions['--list']){
+  // eslint-disable-next-line functional/no-expression-statements -- Report the completed D1 approval to the operator through stdout.
+  console.log('First-user approval completed. The original browser will finish login on its next poll.');
+ }
 }finally{await unlink(file);await rmdir(temp);}

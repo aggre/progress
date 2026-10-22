@@ -46,19 +46,19 @@ export function cycle(event: EventInput, now: number) {
     }
   }
   const progress = clamp(0, 100, (now - start) / (end - start) * 100);
-  return { start, end, progress, remaining: Math.max(0, end - now), complete: event.repeatUnit === 'none' && now >= end, upcoming: now < start };
+  return { start, end, progress, remaining: Math.max(0, end - now), complete: event.repeatUnit === 'none' && now >= end, upcoming: now < start } as const;
 }
 export function remainingText(ms: number): string {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   const days = Math.floor(seconds / 86400), hours = Math.floor(seconds % 86400 / 3600), minutes = Math.floor(seconds % 3600 / 60), sec = seconds % 60;
-  if (days) return `${days.toLocaleString('en-US')}d ${hours}h ${minutes}m`;
-  if (hours) return `${hours}h ${minutes}m ${sec}s`;
-  if (minutes) return `${minutes}m ${sec}s`;
-  return `${sec}s`;
+  return days ? `${days.toLocaleString('en-US')}d ${hours}h ${minutes}m`
+    : hours ? `${hours}h ${minutes}m ${sec}s`
+    : minutes ? `${minutes}m ${sec}s`
+    : `${sec}s`;
 }
 export function repeatLabel(e: EventInput): string {
-  if (e.repeatUnit === 'none') return 'One-time';
-  return `Every ${e.repeatEvery === 1 ? '' : e.repeatEvery + ' '}${e.repeatUnit}${e.repeatEvery === 1 ? '' : 's'}`;
+  return e.repeatUnit === 'none' ? 'One-time'
+    : `Every ${e.repeatEvery === 1 ? '' : e.repeatEvery + ' '}${e.repeatUnit}${e.repeatEvery === 1 ? '' : 's'}`;
 }
 export function toLocal(instant: string, zone: string) { return Temporal.Instant.from(instant).toZonedDateTimeISO(zone).toPlainDateTime().toString({ smallestUnit: 'minute' }); }
 export function fromLocal(value: string, zone: string) { return Temporal.PlainDateTime.from(value).toZonedDateTime(zone, { disambiguation: 'compatible' }).toInstant().toString(); }

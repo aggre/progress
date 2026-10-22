@@ -48,4 +48,4 @@ test('validates dates, colors, names, intervals and timezone',()=>{
   assert.equal(validateEvent(event).title,'Deadline');
   for (const invalid of [{title:''},{color:'red'},{repeatEvery:0},{repeatEvery:1.5},{repeatUnit:'fortnight'},{timeZone:'Not/AZone'},{startAt:event.targetAt},{targetAt:'invalid'}] as const) assert.throws((): Readonly<EventInput>=>validateEvent({...event,...invalid}));
 });
-test('all starter events are valid',()=>{for(const e of starterEvents('Asia/Tokyo')) assert.doesNotThrow((): Readonly<EventInput>=>validateEvent(e));});
+test('all starter events are valid',()=>{for(const e of starterEvents('Asia/Tokyo') as Readonly<EventInput>[]) assert.doesNotThrow((): Readonly<EventInput>=>validateEvent(e));});

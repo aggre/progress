@@ -138,7 +138,7 @@ test('family members share existing and new schedules while only creators can ch
  const memberEvent=((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event;
  assert.equal(memberEvent.canEdit,true);assert.equal(memberEvent.createdBy.username,'family-member');
  const combined=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.equal(combined.events.length,2);assert.equal(combined.events.find(e=>e.id===memberEvent.id)?.canEdit,false);
+ assert.equal(combined.events.length,2);assert.equal(combined.events.find((e:Readonly<ScheduleRecord>)=>e.id===memberEvent.id)?.canEdit,false);
  assert.equal((await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,first.sessionToken)).status,404);
  assert.equal((await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,first.sessionToken)).status,200);
  assert.equal((await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,member.sessionToken)).status,200);

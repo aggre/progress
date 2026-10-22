@@ -16,7 +16,7 @@
   let showCompleted = $state(false);
   let dialog: HTMLDialogElement;
   let nameInput: HTMLInputElement;
-  let editing = $state<ScheduleRecord | null>(null);
+  let editing = $state<Readonly<ScheduleRecord> | null>(null);
   let saving = $state(false);
   let formError = $state('');
   let title = $state('');
@@ -26,17 +26,17 @@
   let repeatEvery = $state(1);
   let zone = $state('Asia/Tokyo');
   let targetLocal = $state('');
-  let deleteEvent = $state<ScheduleRecord | null>(null);
+  let deleteEvent = $state<Readonly<ScheduleRecord> | null>(null);
   let deleteDialog: HTMLDialogElement;
   let toast = $state('');
   let toastTimer: ReturnType<typeof setTimeout>;
   let seeding = $state(false);
   const emojis = ['✨','🎯','🌿','☀️','🌙','🎉','🎂','✈️','📚','💻','🏃','☕','❤️','☘️','⏱️','🏖️'];
   const timeZones = [...new Set(['Asia/Tokyo', Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC', ...Intl.supportedValuesOf('timeZone')])];
-  const rows = $derived(events.map(e=>({...e, timing:cycle(e,now)})));
+  const rows = $derived(events.map((e:Readonly<ScheduleRecord>)=>({...e, timing:cycle(e,now)})));
   const completed = $derived(rows.filter(e=>e.timing.complete).length);
   const active = $derived(rows.filter(e=>!e.timing.complete));
-  const repeatingCount = $derived(events.filter(e=>e.repeatUnit !== 'none').length);
+  const repeatingCount = $derived(events.filter((e:Readonly<ScheduleRecord>)=>e.repeatUnit !== 'none').length);
   const visible = $derived.by(()=>{
     let list = rows.filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && e.title.toLowerCase().includes(query.toLowerCase()));
     if (sort === 'soonest') list = list.toSorted((a,b)=>a.timing.end-b.timing.end);
@@ -82,19 +82,19 @@
       const targetAt=fromLocal(targetLocal,zone);
       const startAt=repeatUnit === 'none' ? editing?.startAt ?? new Date().toISOString() : new Date(shift(targetAt,zone,repeatUnit,-repeatEvery)).toISOString();
       const input: Readonly<EventInput> = {title,emoji,color,targetAt,startAt,repeatUnit,repeatEvery,timeZone:zone};
-      const result=await api<{ event: ScheduleRecord }>(`/api/schedules${editing ? '/'+editing.id : ''}`,editing ? 'PUT' : 'POST',input);
-      events=editing ? events.map(e=>e.id===editing?.id ? result.event : e) : [...events,result.event];
+      const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>(`/api/schedules${editing ? '/'+editing.id : ''}`,editing ? 'PUT' : 'POST',input);
+      events=editing ? events.map((e:Readonly<ScheduleRecord>)=>e.id===editing?.id ? result.event : e) : [...events,result.event];
       dialog.close();notify(editing ? 'Event updated.' : 'A little something to look forward to.');
     } catch(e) { formError=e instanceof Error ? e.message : 'Unable to save.'; } finally { saving=false; }
   }
   async function remove() {
     if (!deleteEvent || saving) return; saving=true; formError='';
-    try { await api('/api/schedules/'+deleteEvent.id,'DELETE');events=events.filter(e=>e.id!==deleteEvent?.id);deleteDialog.close();notify('Event deleted.'); }
+    try { await api('/api/schedules/'+deleteEvent.id,'DELETE');events=events.filter((e:Readonly<ScheduleRecord>)=>e.id!==deleteEvent?.id);deleteDialog.close();notify('Event deleted.'); }
     catch(e) {formError=e instanceof Error ? e.message : 'Unable to delete.';}finally{saving=false;}
   }
   async function seed() {
     seeding=true;error='';
-    try { for (const input of starterEvents('Asia/Tokyo')) { const result=await api<{ event: ScheduleRecord }>('/api/schedules','POST',input);events=[...events,result.event]; } notify('Your everyday countdowns are ready.'); }
+    try { for (const input of starterEvents('Asia/Tokyo')) { const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules','POST',input);events=[...events,result.event]; } notify('Your everyday countdowns are ready.'); }
     catch(e){error=e instanceof Error ? e.message : 'Unable to add starter events.';}finally{seeding=false;}
   }
   function exportEvents() {

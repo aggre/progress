@@ -36,14 +36,14 @@ test('empty installation exposes no app data and has no public registration or b
  for(const path of ['/api/me','/api/schedules','/api/family'])assert.equal((await f.request(path)).status,401);
  assert.equal((await f.request('/api/family/members','POST',{username:'new-user'})).status,401);
  for(const path of ['/api/auth/register','/api/auth/bootstrap','/api/register','/api/bootstrap'])assert.equal((await f.request(path,'POST',{username:'new-user'})).status,404);
- const c=await f.challenge('unknown-user');
+ const c:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  assert.equal((await f.request('/api/me','GET',undefined,c.sessionToken)).status,401);
  assert.equal((await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).status,200);
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
 });
 
 test('operator bootstrap atomically creates one family/user and activates only the applicant token',async(t)=>{
- const f=await fixture(t),c=await f.challenge('first-user');
+ const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
  for(const token of [c.pollToken,c.approvalToken,c.sessionToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
  await assert.rejects(f.bootstrap(c,'wrong-user'));
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
@@ -62,8 +62,8 @@ test('operator bootstrap atomically creates one family/user and activates only t
 });
 
 test('unknown and registered usernames have the same challenge response and secrets are not interchangeable',async(t)=>{
- const f=await fixture(t),first=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
- const known=await f.challenge('registered-user'),unknown=await f.challenge('unknown-user');
+ const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
+ const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  assert.deepEqual(Object.keys(known).sort(),Object.keys(unknown).sort());
  assert.equal(known.pollInterval,unknown.pollInterval);assert.ok(Math.abs(known.expiresAt-unknown.expiresAt)<=1000);
  assert.equal(new Set([known.pollToken,known.approvalToken,known.sessionToken]).size,3);
@@ -75,11 +75,11 @@ test('unknown and registered usernames have the same challenge response and secr
 });
 
 test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
- const f=await fixture(t),first=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
+ const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
  const added=await add.json() as {user:Identity['user']};assert.equal(added.user.username,'family_member');assert.equal(added.user.familyId,owner.familyId);
  assert.equal((await f.request('/api/family/members','POST',{username:'elsewhere',familyId:'forged-family'},first.sessionToken)).status,400);
- const member=await f.challenge('family_member');
+ const member:Readonly<LoginChallenge>=await f.challenge('family_member');
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
  const inspected=await f.request(`/api/auth/challenges/${member.id}/inspect`,'POST',{approvalToken:member.approvalToken},first.sessionToken);assert.equal(inspected.status,200);
  const inspection=await inspected.json() as Readonly<{username:string;verificationCode:string}>;assert.equal(inspection.username,'family_member');assert.equal(inspection.verificationCode,member.verificationCode);
@@ -99,10 +99,10 @@ test('same-family approval works across users, is idempotent, and cannot reactiv
 });
 
 test('family members share existing and new schedules while only creators can change them',async(t)=>{
- const f=await fixture(t),first=await f.challenge('first-user');const owner=await f.bootstrap(first,'first-user');
+ const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner=await f.bootstrap(first,'first-user');
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
- const member=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
- const outsider=await f.challenge('outsider-user'),familyId=randomUUID(),userId=randomUUID();
+ const member:Readonly<LoginChallenge>=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
+ const outsider:Readonly<LoginChallenge>=await f.challenge('outsider-user'),familyId=randomUUID(),userId=randomUUID();
  await f.db.batch([
   f.db.prepare('INSERT INTO families (id,name) VALUES (?,?)').bind(familyId,'Other family'),
   f.db.prepare('INSERT INTO users (id,username,family_id) VALUES (?,?,?)').bind(userId,'outsider-user',familyId),

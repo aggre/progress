@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import type { EventInput } from '@little/shared/events';
 import type { LoginChallenge, Identity, ScheduleRecord } from '@little/shared/api';
 
 const origin='http://127.0.0.1:4321';
@@ -25,7 +26,7 @@ async function fixture(t:TestContext){
  }
  const request=(path:string,method='GET',body?:unknown,token?:string,from:string|undefined=origin)=>mf.dispatchFetch('https://api.example'+path,{method,headers:{...(from?{Origin:from}:{}),...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});
  async function challenge(name:string){const response=await request('/api/auth/challenges','POST',{username:name});assert.equal(response.status,201);return await response.json() as LoginChallenge;}
- async function bootstrap(challenge:LoginChallenge,name:string,claimLegacy=0){const familyId=randomUUID(),userId=randomUUID();await db.prepare('INSERT INTO bootstrap_approvals (singleton,challenge_id,expected_username,family_id,user_id,family_name,claim_legacy) VALUES (1,?,?,?,?,?,?)').bind(challenge.id,name,familyId,userId,'Test family',claimLegacy).run();return {familyId,userId};}
+ async function bootstrap(challenge:Readonly<LoginChallenge>,name:string,claimLegacy=0){const familyId=randomUUID(),userId=randomUUID();await db.prepare('INSERT INTO bootstrap_approvals (singleton,challenge_id,expected_username,family_id,user_id,family_name,claim_legacy) VALUES (1,?,?,?,?,?,?)').bind(challenge.id,name,familyId,userId,'Test family',claimLegacy).run();return {familyId,userId};}
  return {mf,db,request,challenge,bootstrap};
 }
 
@@ -50,7 +51,7 @@ test('operator bootstrap atomically creates one family/user and activates only t
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM families').first('n'),0);
  const created:Readonly<{familyId:string;userId:string}>=await f.bootstrap(c,'first-user');
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);assert.equal(response.status,200);
- const identity=await response.json() as Identity;assert.equal(identity.user.id,created.userId);assert.equal(identity.family.id,created.familyId);
+ const identity=await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>;assert.equal(identity.user.id,created.userId);assert.equal(identity.family.id,created.familyId);
  for(const token of [c.pollToken,c.approvalToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
  assert.deepEqual(await (await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).json(),{status:'approved'});
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n'),1);
@@ -77,7 +78,7 @@ test('unknown and registered usernames have the same challenge response and secr
 test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
- const added=await add.json() as {user:Identity['user']};assert.equal(added.user.username,'family_member');assert.equal(added.user.familyId,owner.familyId);
+ const added=await add.json() as Readonly<{user:Readonly<Identity['user']>}>;assert.equal(added.user.username,'family_member');assert.equal(added.user.familyId,owner.familyId);
  assert.equal((await f.request('/api/family/members','POST',{username:'elsewhere',familyId:'forged-family'},first.sessionToken)).status,400);
  const member:Readonly<LoginChallenge>=await f.challenge('family_member');
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
@@ -99,7 +100,7 @@ test('same-family approval works across users, is idempotent, and cannot reactiv
 });
 
 test('family members share existing and new schedules while only creators can change them',async(t)=>{
- const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner=await f.bootstrap(first,'first-user');
+ const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member:Readonly<LoginChallenge>=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
  const outsider:Readonly<LoginChallenge>=await f.challenge('outsider-user'),familyId=randomUUID(),userId=randomUUID();
@@ -111,7 +112,7 @@ test('family members share existing and new schedules while only creators can ch
  const attempt:Readonly<LoginChallenge>=await f.challenge('family-member');
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${attempt.id}/${action}`,'POST',{approvalToken:attempt.approvalToken},outsider.sessionToken)).status,404);
  assert.equal((await f.request('/api/me','GET',undefined,attempt.sessionToken)).status,401);
- const event={title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
+ const event:Readonly<EventInput>={title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
  const created=await f.request('/api/schedules','POST',event,first.sessionToken);assert.equal(created.status,201);
  const saved=await created.json() as {event:ScheduleRecord};
  assert.equal(saved.event.createdBy.username,'first-user');assert.equal(saved.event.canEdit,true);
@@ -147,7 +148,7 @@ test('family members share existing and new schedules while only creators can ch
 test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
- const member=((await added.json()) as {user:Identity['user']}).user;
+ const member=((await added.json()) as {user:Readonly<Identity['user']>}).user;
  await f.db.prepare(`WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<501)
   INSERT INTO events (id,owner_id,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at)
   SELECT 'existing-'||n, CASE WHEN n<=500 THEN ? ELSE ? END, 'Existing '||n, '🌿', '#7ba989',

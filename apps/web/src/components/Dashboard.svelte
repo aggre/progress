@@ -81,7 +81,7 @@
     try {
       const targetAt=fromLocal(targetLocal,zone);
       const startAt=repeatUnit === 'none' ? editing?.startAt ?? new Date().toISOString() : new Date(shift(targetAt,zone,repeatUnit,-repeatEvery)).toISOString();
-      const input: EventInput = {title,emoji,color,targetAt,startAt,repeatUnit,repeatEvery,timeZone:zone};
+      const input: Readonly<EventInput> = {title,emoji,color,targetAt,startAt,repeatUnit,repeatEvery,timeZone:zone};
       const result=await api<{ event: ScheduleRecord }>(`/api/schedules${editing ? '/'+editing.id : ''}`,editing ? 'PUT' : 'POST',input);
       events=editing ? events.map(e=>e.id===editing?.id ? result.event : e) : [...events,result.event];
       dialog.close();notify(editing ? 'Event updated.' : 'A little something to look forward to.');

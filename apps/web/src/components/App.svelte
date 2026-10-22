@@ -51,7 +51,7 @@
       history.replaceState(null, '', `${location.pathname}${location.search}`);
       const raw = fragment.slice('#approve='.length);
       const separator = raw.indexOf('.');
-      const intent = { id: raw.slice(0, separator), approvalToken: raw.slice(separator + 1) };
+      const intent: ApprovalIntent = { id: raw.slice(0, separator), approvalToken: raw.slice(separator + 1) };
       if (separator > 0 && validId(intent.id) && validSecret(intent.approvalToken)) {
         approval = intent;
         try { sessionStorage.setItem(approvalKey, JSON.stringify(intent)); } catch { /* Current tab can still approve. */ }

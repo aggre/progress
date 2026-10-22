@@ -32,7 +32,7 @@ export function shift(target: string, zone: string, unit: RepeatUnit, amount: nu
   return unit === 'none' ? anchor.epochMilliseconds
     : anchor.add({ [`${unit}s`]: amount }, { overflow: 'constrain' }).epochMilliseconds;
 }
-export function cycle(event: EventInput, now: number) {
+export function cycle(event: Readonly<EventInput>, now: number) {
   let start = Date.parse(event.startAt), end = Date.parse(event.targetAt);
   if (event.repeatUnit !== 'none') {
     const at = (n: number) => shift(event.targetAt, event.timeZone, event.repeatUnit, n * event.repeatEvery);
@@ -56,7 +56,7 @@ export function remainingText(ms: number): string {
     : minutes ? `${minutes}m ${sec}s`
     : `${sec}s`;
 }
-export function repeatLabel(e: EventInput): string {
+export function repeatLabel(e: Readonly<EventInput>): string {
   return e.repeatUnit === 'none' ? 'One-time'
     : `Every ${e.repeatEvery === 1 ? '' : e.repeatEvery + ' '}${e.repeatUnit}${e.repeatEvery === 1 ? '' : 's'}`;
 }

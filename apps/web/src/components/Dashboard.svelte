@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { sortBy } from 'ramda';
+  import { sort as sortRows, sortBy } from 'ramda';
   import { cycle, remainingText, repeatLabel, palette, units, shift, toLocal, fromLocal, starterEvents, type EventInput, type RepeatUnit } from '@little/shared/events';
 
   import type { Identity, ScheduleRecord } from '@little/shared/api';
@@ -41,8 +41,8 @@
   const repeatingCount = $derived(events.filter((e:Readonly<ScheduleRecord>)=>e.repeatUnit !== 'none').length);
   const visible = $derived.by(()=>{
     let list = rows.filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && e.title.toLowerCase().includes(query.toLowerCase()));
-    if (sort === 'soonest') list = list.toSorted((a,b)=>a.timing.end-b.timing.end);
-    if (sort === 'name') list = list.toSorted((a,b)=>a.title.localeCompare(b.title));
+    if (sort === 'soonest') list = sortBy((event: EventRow)=>event.timing.end,list);
+    if (sort === 'name') list = sortRows((a: EventRow,b: EventRow)=>a.title.localeCompare(b.title),list);
     return list;
   });
   const next = $derived(sortBy((event: EventRow)=>event.timing.end,active)[0]);

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { validateEvent, type ScheduleEvent } from '@little/shared/events';
-import type { ScheduleRecord } from '@little/shared/api';
+import type { ScheduleRecord, User } from '@little/shared/api';
 import { jsonObject, requireAuth, throttle } from './security';
 import type { AppEnv } from './types';
 
@@ -23,7 +23,7 @@ export const events = new Hono<AppEnv>();
 events.use('*', requireAuth);
 
 events.get('/', async c => {
-  const user = c.get('identity').user;
+  const user: Readonly<User> = c.get('identity').user;
   // Resolve sharing through the creator's current family, including existing events.
   const result = await c.env.DB.prepare(`
     SELECT e.*, u.username FROM events e JOIN users u ON u.id = e.owner_id
@@ -33,7 +33,7 @@ events.get('/', async c => {
 });
 
 events.post('/', async c => {
-  const user = c.get('identity').user;
+  const user: Readonly<User> = c.get('identity').user;
   if (!await throttle(c, 'event-write', 60, 60, user.id)) return c.json({ error: 'Please slow down.' }, 429);
   let input;
   try { input = validateEvent(await jsonObject(c)); }

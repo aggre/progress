@@ -21,7 +21,7 @@
     event.preventDefault(); if (saving) return;
     saving = true; error = ''; notice = '';
     try {
-      const result = await api<{ user: User }>('/api/family/members', 'POST', { username: username.trim().toLowerCase() });
+      const result = await api<Readonly<{ user: Readonly<User> }>>('/api/family/members', 'POST', { username: username.trim().toLowerCase() });
       members = [...members, result.user]; username = '';
       notice = `${result.user.username} is now in your family. They can sign in with their username and ask a family member to approve their QR code.`;
     } catch (e) { error = e instanceof Error ? e.message : 'Unable to add this family member.'; }

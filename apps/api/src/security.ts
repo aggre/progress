@@ -24,6 +24,6 @@ export const requireAuth:MiddlewareHandler<AppEnv>=async(c,next)=>{
  const tokenHash=await hash(auth[1]);
  const row=await c.env.DB.prepare('SELECT u.id,u.username,u.family_id,f.name AS family_name FROM sessions s JOIN users u ON u.id=s.user_id JOIN families f ON f.id=u.family_id WHERE s.token_hash=? AND s.expires_at>unixepoch()').bind(tokenHash).first<Readonly<{id:string;username:string;family_id:string;family_name:string}>>();
  if(!row)return c.json({error:'Your session has expired. Please log in again.'},401);
- const identity:Identity={user:{id:row.id,username:row.username,familyId:row.family_id},family:{id:row.family_id,name:row.family_name}};
+ const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>={user:{id:row.id,username:row.username,familyId:row.family_id},family:{id:row.family_id,name:row.family_name}};
  c.set('identity',identity);c.set('sessionHash',tokenHash);await next();
 };

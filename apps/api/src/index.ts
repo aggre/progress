@@ -1,3 +1,4 @@
+import type { Identity } from '@little/shared/api';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { auth } from './auth';
@@ -24,7 +25,7 @@ app.get('/api/family',requireAuth,async c=>{
  const r=await c.env.DB.prepare('SELECT id,username,family_id AS familyId FROM users WHERE family_id=? ORDER BY created_at,id LIMIT 50').bind(family.id).all();return c.json({family,members:r.results});
 });
 app.post('/api/family/members',requireAuth,async c=>{
- const identity=c.get('identity');if(!await throttle(c,'member-add',10,3600,identity.user.id))return c.json({error:'Please try again later.'},429);
+ const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>=c.get('identity');if(!await throttle(c,'member-add',10,3600,identity.user.id))return c.json({error:'Please try again later.'},429);
  let name:string;try{const data=await jsonObject(c);if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');name=username(data.username);}catch(e){return c.json({error:e instanceof Error?e.message:'Invalid username.'},400);}
  const id=crypto.randomUUID();
  try{

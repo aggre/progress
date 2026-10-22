@@ -29,7 +29,7 @@
   }
   onMount(() => { dialog.showModal(); void load(); });
 </script>
-<dialog bind:this={dialog} onclose={onclose} oncancel={event => { if (saving) event.preventDefault(); }} aria-labelledby="family-title">
+<dialog bind:this={dialog} onclose={onclose} oncancel={event => saving ? event.preventDefault() : undefined} aria-labelledby="family-title">
   <div class="panel-top"><div><p class="eyebrow">THE PEOPLE YOU TRUST</p><h2 id="family-title">Your family.</h2></div><button class="close-button" aria-label="Close family" disabled={saving} onclick={() => dialog.close()}>×</button></div>
   <p class="family-name">{family?.name || identity.family.name}</p><p class="description">A small circle that lets each other in. Any family member can approve sign-ins or add someone new.</p>
   {#if loading}<p class="status" role="status">Gathering your family…</p>{:else}<ul class="member-list">{#each members as member (member.id)}<li><span class="member-avatar" aria-hidden="true">{member.username.slice(0, 1).toUpperCase()}</span><span class="member-name">{member.username}</span>{#if member.id===identity.user.id}<span class="you-label">You</span>{/if}</li>{/each}</ul>{/if}

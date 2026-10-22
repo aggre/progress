@@ -1,8 +1,8 @@
 import type { ScheduleEvent } from './events';
 
-export interface User { id: string; username: string; familyId: string; }
+export interface User { readonly id: string; readonly username: string; readonly familyId: string; }
 export interface Family { readonly id: string; readonly name: string; }
-export interface Identity { user: User; family: Family; }
+export interface Identity { readonly user: User; readonly family: Family; }
 export interface ScheduleRecord extends ScheduleEvent {
   createdBy: Pick<User, 'id' | 'username'>;
   canEdit: boolean;

@@ -16,9 +16,11 @@ export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); this.name = 'ApiError'; }
 }
 export async function api<T = { ok: boolean }>(path: string, method = 'GET', data?: unknown, token: string | null = getSession()): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (data !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const headers: Readonly<Record<string, string>> = {
+    Accept: 'application/json',
+    ...(data !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(15000) });

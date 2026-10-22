@@ -8,13 +8,22 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const args=process.argv.slice(2),flags=new Set(['--remote','--local','--claim-legacy','--list']);
 const values=new Set(['--challenge','--username','--family']);
 const options={};
-function fail(message){console.error(message);process.exit(1);}
+/**
+ * @param {string} message
+ * @returns {never}
+ */
+function fail(message){
+ // eslint-disable-next-line functional/no-expression-statements -- Report CLI failures to the operator through stderr.
+ console.error(message);
+ process.exit(1);
+}
 for(let i=0;i<args.length;i++){
  const name=args[i];if(flags.has(name)){if(options[name])fail('Duplicate option: '+name);options[name]=true;}
  else if(values.has(name)){if(options[name]||!args[i+1]||args[i+1].startsWith('--'))fail('Missing or duplicate value: '+name);options[name]=args[++i];}
  else fail('Unknown option: '+name);
 }
 if(!!options['--remote']===!!options['--local'])fail('Choose exactly one of --local or --remote.');
+/** @param {string} value */
 const literal=value=>"'"+value.replaceAll("'","''")+"'";
 let sql;
 if(options['--list']){

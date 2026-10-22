@@ -39,16 +39,16 @@ const parsedOptions=parsed.options;
 if(!!parsedOptions['--remote']===!!parsedOptions['--local'])fail('Choose exactly one of --local or --remote.');
 /** @param {string} value */
 const literal=value=>"'"+value.replaceAll("'","''")+"'";
-let sql;
-if(parsedOptions['--list']){
- sql="SELECT id,username,verification_code,datetime(expires_at,'unixepoch') AS expires_at_utc FROM login_challenges WHERE status='pending' AND expires_at>unixepoch() ORDER BY created_at DESC LIMIT 20;";
-}else{
- const id=parsedOptions['--challenge'],rawName=parsedOptions['--username'],family=parsedOptions['--family']||'My family';
- if(typeof id!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id))fail('Provide --challenge with the pending request ID from the login screen.');
- if(typeof rawName!=='string'||!/^[a-z0-9][a-z0-9_-]{2,31}$/.test(rawName.trim().toLowerCase()))fail('Provide --username with the expected username (3–32 letters, numbers, underscores or hyphens).');
- if(typeof family!=='string'||!family.trim()||family.trim().length>80)fail('Use a family name between 1 and 80 characters.');
- sql=`INSERT INTO bootstrap_approvals (singleton,challenge_id,expected_username,family_id,user_id,family_name,claim_legacy) VALUES (1,${literal(id)},${literal(rawName.trim().toLowerCase())},${literal(randomUUID())},${literal(randomUUID())},${literal(family.trim())},${parsedOptions['--claim-legacy']?1:0});`;
-}
+const id=parsedOptions['--challenge'],rawName=parsedOptions['--username'],family=parsedOptions['--family']||'My family';
+const sql=parsedOptions['--list']
+ ? "SELECT id,username,verification_code,datetime(expires_at,'unixepoch') AS expires_at_utc FROM login_challenges WHERE status='pending' AND expires_at>unixepoch() ORDER BY created_at DESC LIMIT 20;"
+ : typeof id!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)
+  ? fail('Provide --challenge with the pending request ID from the login screen.')
+  : typeof rawName!=='string'||!/^[a-z0-9][a-z0-9_-]{2,31}$/.test(rawName.trim().toLowerCase())
+   ? fail('Provide --username with the expected username (3–32 letters, numbers, underscores or hyphens).')
+   : typeof family!=='string'||!family.trim()||family.trim().length>80
+    ? fail('Use a family name between 1 and 80 characters.')
+    : `INSERT INTO bootstrap_approvals (singleton,challenge_id,expected_username,family_id,user_id,family_name,claim_legacy) VALUES (1,${literal(id)},${literal(rawName.trim().toLowerCase())},${literal(randomUUID())},${literal(randomUUID())},${literal(family.trim())},${parsedOptions['--claim-legacy']?1:0});`;
 // eslint-disable-next-line functional/no-expression-statements -- Create the local workspace for the temporary operator SQL file.
 await mkdir(resolve(root,'work'),{recursive:true});
 const temp=await mkdtemp(resolve(root,'work/bootstrap-')),file=resolve(temp,'operation.sql');

@@ -4,8 +4,8 @@ export interface User { readonly id: string; readonly username: string; readonly
 export interface Family { readonly id: string; readonly name: string; }
 export interface Identity { readonly user: User; readonly family: Family; }
 export interface ScheduleRecord extends ScheduleEvent {
-  createdBy: Pick<User, 'id' | 'username'>;
-  canEdit: boolean;
+  readonly createdBy: Pick<User, 'id' | 'username'>;
+  readonly canEdit: boolean;
 }
 export interface LoginChallenge {
   readonly id: string;

@@ -41,13 +41,16 @@
     // eslint-disable-next-line functional/no-try-statements -- Removing transient browser state remains safe when storage is unavailable.
     try { sessionStorage.removeItem(key); } catch { /* No stored value to remove. */ }
   }
+  // eslint-disable-next-line functional/functional-parameters -- Timer cleanup uses the current browser timer handle.
   function stopPolling() { pollGeneration += 1; if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined; }
+  // eslint-disable-next-line functional/functional-parameters -- Clear the current browser login state, timer, and session storage.
   function clearPending() { stopPolling(); pending = null; qrImage = ''; expired = false; storageRemove(challengeKey); }
   function validSecret(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value); }
   function validId(value: unknown): value is string { return typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value); }
   function validChallenge(value: SavedChallenge | null): value is SavedChallenge {
     return !!value && validId(value.id) && validSecret(value.pollToken) && validSecret(value.sessionToken) && validSecret(value.approvalToken) && typeof value.username === 'string' && typeof value.expiresAt === 'number' && Number.isFinite(value.expiresAt) && typeof value.pollInterval === 'number' && value.pollInterval > 0 && typeof value.verificationCode === 'string';
   }
+  // eslint-disable-next-line functional/functional-parameters -- Read the browser URL and tab storage, then update browser history.
   function readApprovalIntent() {
     const fragment = window.location.hash;
     if (fragment.startsWith('#approve=')) {
@@ -66,6 +69,7 @@
       if (stored && validId(stored.id) && validSecret(stored.approvalToken)) approval = stored;
     }
   }
+  // eslint-disable-next-line functional/functional-parameters -- Load the identity for the current browser session through the API.
   async function loadIdentity() {
     const token = getSession();
     if (!token) { identity = null; checking = false; return; }
@@ -115,6 +119,7 @@
     }
     if (generation === pollGeneration) pollTimer = setTimeout(() => { void poll(generation); }, Math.max(3000, challenge.pollInterval, Math.min(30000, failures * 5000)));
   }
+  // eslint-disable-next-line functional/functional-parameters -- Schedule the next browser timer for the current login attempt.
   function startPolling() {
     stopPolling(); failures = 0;
     const generation = pollGeneration;
@@ -134,6 +139,7 @@
     } catch (e) { clearPending(); error = e instanceof Error ? e.message : 'Unable to start sign-in.'; }
     finally { busy = false; }
   }
+  // eslint-disable-next-line functional/functional-parameters -- Inspect the current QR approval request through the API.
   async function inspectApproval() {
     if (!approval || !identity) return;
     approvalLoading = true; approvalError = ''; approvalDetails = null;
@@ -141,6 +147,7 @@
     catch (e) { approvalError = e instanceof Error ? e.message : 'Unable to check this sign-in request.'; }
     finally { approvalLoading = false; }
   }
+  // eslint-disable-next-line functional/functional-parameters -- Submit the current approval to the API and clear its tab storage.
   async function approve() {
     if (!approval || !approvalDetails || busy) return;
     busy = true; approvalError = '';
@@ -151,6 +158,7 @@
     finally { busy = false; }
   }
   function leaveApproval() { approval = null; approvalDetails = null; approvalError = ''; approved = false; storageRemove(approvalKey); }
+  // eslint-disable-next-line functional/functional-parameters -- Revoke the current API session and clear browser storage and timers.
   async function logout() {
     try { await api('/api/auth/logout', 'POST', {}); }
     catch { /* Local sign-out still removes this device's access. */ }

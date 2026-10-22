@@ -3,9 +3,9 @@ import { clamp } from 'ramda';
 export const units = ['none', 'minute', 'hour', 'day', 'week', 'month', 'year'] as const;
 export type RepeatUnit = typeof units[number];
 export interface ScheduleEvent {
-  id: string; title: string; emoji: string; color: string; startAt: string;
-  targetAt: string; repeatUnit: RepeatUnit; repeatEvery: number; timeZone: string;
-  createdAt: string; updatedAt: string;
+  readonly id: string; readonly title: string; readonly emoji: string; readonly color: string; readonly startAt: string;
+  readonly targetAt: string; readonly repeatUnit: RepeatUnit; readonly repeatEvery: number; readonly timeZone: string;
+  readonly createdAt: string; readonly updatedAt: string;
 }
 export type EventInput = Readonly<Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>>;
 export const palette = ['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'];

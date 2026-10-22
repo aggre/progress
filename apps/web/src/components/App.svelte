@@ -6,7 +6,7 @@
   import Dashboard from './Dashboard.svelte';
   import FamilyPanel from './FamilyPanel.svelte';
 
-  type SavedChallenge = LoginChallenge & { username: string };
+  type SavedChallenge = Readonly<LoginChallenge & { username: string }>;
   type ApprovalIntent = Readonly<{ id: string; approvalToken: string }>;
   let identity = $state<Identity | null>(null);
   let checking = $state(true);
@@ -65,7 +65,7 @@
     const token = getSession();
     if (!token) { identity = null; checking = false; return; }
     try {
-      const verified = await api<Identity>('/api/me', 'GET', undefined, token);
+      const verified = await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, token);
       if (getSession() !== token) return;
       identity = verified;
       error = '';
@@ -92,7 +92,7 @@
       failures = 0;
       error = '';
       if (result.status === 'approved') {
-        const verified = await api<Identity>('/api/me', 'GET', undefined, challenge.sessionToken);
+        const verified = await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, challenge.sessionToken);
         if (generation !== pollGeneration) return;
         saveSession(challenge.sessionToken);
         clearPending();

@@ -13,7 +13,7 @@ export function clearSession() { try { localStorage.removeItem(sessionKey); } ca
 export function sessionStorageKey(value: string) { return `${STORAGE_NAMESPACE}:${value}`; }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); this.name = 'ApiError'; }
+  constructor(message: string, public readonly status: number) { super(message); this.name = 'ApiError'; }
 }
 export async function api<T = { ok: boolean }>(path: string, method = 'GET', data?: unknown, token: string | null = getSession()): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };

@@ -8,13 +8,13 @@ export interface ScheduleRecord extends ScheduleEvent {
   canEdit: boolean;
 }
 export interface LoginChallenge {
-  id: string;
-  pollToken: string;
-  sessionToken: string;
-  approvalToken: string;
-  expiresAt: number; // Unix milliseconds.
-  pollInterval: number; // Milliseconds, minimum interval.
-  verificationCode: string;
+  readonly id: string;
+  readonly pollToken: string;
+  readonly sessionToken: string;
+  readonly approvalToken: string;
+  readonly expiresAt: number; // Unix milliseconds.
+  readonly pollInterval: number; // Milliseconds, minimum interval.
+  readonly verificationCode: string;
 }
 export interface PendingApproval { readonly username: string; readonly verificationCode: string; readonly expiresAt: number; }
 export type LoginStatus = Readonly<{ status: 'pending' | 'approved' | 'expired' }>;

@@ -1,7 +1,7 @@
 import type { ScheduleEvent } from './events';
 
 export interface User { id: string; username: string; familyId: string; }
-export interface Family { id: string; name: string; }
+export interface Family { readonly id: string; readonly name: string; }
 export interface Identity { user: User; family: Family; }
 export interface ScheduleRecord extends ScheduleEvent {
   createdBy: Pick<User, 'id' | 'username'>;
@@ -16,7 +16,7 @@ export interface LoginChallenge {
   pollInterval: number; // Milliseconds, minimum interval.
   verificationCode: string;
 }
-export interface PendingApproval { username: string; verificationCode: string; expiresAt: number; }
+export interface PendingApproval { readonly username: string; readonly verificationCode: string; readonly expiresAt: number; }
 export type LoginStatus = { status: 'pending' | 'approved' | 'expired' };
 // Public: POST /api/auth/challenges { username } -> LoginChallenge.
 // POST /api/auth/challenges/:id/poll { pollToken } -> LoginStatus.

@@ -29,8 +29,8 @@ export function validateEvent(raw: unknown): EventInput {
 }
 export function shift(target: string, zone: string, unit: RepeatUnit, amount: number): number {
   const anchor = Temporal.Instant.from(target).toZonedDateTimeISO(zone);
-  if (unit === 'none') return anchor.epochMilliseconds;
-  return anchor.add({ [`${unit}s`]: amount }, { overflow: 'constrain' }).epochMilliseconds;
+  return unit === 'none' ? anchor.epochMilliseconds
+    : anchor.add({ [`${unit}s`]: amount }, { overflow: 'constrain' }).epochMilliseconds;
 }
 export function cycle(event: EventInput, now: number) {
   let start = Date.parse(event.startAt), end = Date.parse(event.targetAt);

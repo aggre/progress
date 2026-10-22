@@ -73,11 +73,8 @@
     return repeatUnit === 'week' && repeatEvery === 2 ? 'two-weeks' : repeatUnit;
   }
   function setRepeatChoice(choice: RepeatUnit | 'two-weeks') {
-    if (choice === 'two-weeks') { repeatUnit = 'week'; repeatEvery = 2; }
-    else {
-      if (getRepeatChoice() === 'two-weeks') repeatEvery = 1;
-      repeatUnit = choice;
-    }
+    repeatEvery = choice === 'two-weeks' ? 2 : getRepeatChoice() === 'two-weeks' ? 1 : repeatEvery;
+    repeatUnit = choice === 'two-weeks' ? 'week' : choice;
   }
   async function save(event: SubmitEvent) {
     event.preventDefault(); if (saving) return; saving=true;formError='';
@@ -142,7 +139,7 @@
   <footer class="site-footer"><span>little by little<span class="brand-dot">.</span><span class="footer-separator">/</span>At your own pace.</span><div><button onclick={exportEvents} disabled={!events.length}>Export events ↗</button><button onclick={onlogout}>Sign out ↗</button></div></footer>
 </div>
 
-<dialog bind:this={dialog} class="event-dialog" oncancel={e=>{if(saving)e.preventDefault();}}>
+<dialog bind:this={dialog} class="event-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}>
   <form onsubmit={save}>
     <div class="dialog-heading"><div><p class="eyebrow">MAKE TIME FOR IT</p><h2>{editing ? 'Edit your moment.' : 'A new little countdown.'}</h2></div><button type="button" class="close-button" aria-label="Close editor" disabled={saving} onclick={()=>dialog.close()}>×</button></div>
     <div class="form-grid name-row"><label>Emoji<input class="emoji-input" bind:value={emoji} required maxlength="32" aria-label="Event emoji"/></label><label>Event name<input bind:this={nameInput} bind:value={title} placeholder="Something to look forward to" required maxlength="100"/></label></div>
@@ -157,7 +154,7 @@
     <div class="dialog-footer">{#if editing}<button type="button" class="danger-button" disabled={saving} onclick={()=>confirmDelete(editing!)}>Delete event</button>{:else}<span></span>{/if}<div><button type="button" class="secondary" disabled={saving} onclick={()=>dialog.close()}>Cancel</button><button class="primary" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create event'}</button></div></div>
   </form>
 </dialog>
-<dialog bind:this={deleteDialog} class="delete-dialog" oncancel={e=>{if(saving)e.preventDefault();}}><h2>Let this moment go?</h2><p>“{deleteEvent?.title}” will be permanently deleted.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div><button class="secondary" disabled={saving} onclick={()=>deleteDialog.close()}>Keep it</button><button class="delete-confirm" disabled={saving} onclick={async()=>{await remove();if(!deleteDialog.open)dialog.close();}}>{saving ? 'Deleting…' : 'Delete event'}</button></div></dialog>
+<dialog bind:this={deleteDialog} class="delete-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}><h2>Let this moment go?</h2><p>“{deleteEvent?.title}” will be permanently deleted.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div><button class="secondary" disabled={saving} onclick={()=>deleteDialog.close()}>Keep it</button><button class="delete-confirm" disabled={saving} onclick={async()=>{await remove();if(!deleteDialog.open)dialog.close();}}>{saving ? 'Deleting…' : 'Delete event'}</button></div></dialog>
 {#if toast}<div class="toast" role="status"><span>✓</span>{toast}</div>{/if}
 
 <style>

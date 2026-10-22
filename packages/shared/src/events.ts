@@ -11,7 +11,7 @@ export type EventInput = Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>;
 export const palette = ['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'];
 export function validateEvent(raw: unknown): EventInput {
   if (!raw || typeof raw !== 'object') throw new Error('Please enter an event.');
-  const v = raw as Record<string, unknown>;
+  const v = raw as Readonly<Record<string, unknown>>;
   if (typeof v.title !== 'string' || !v.title.trim() || v.title.trim().length > 100) throw new Error('Use an event name between 1 and 100 characters.');
   if (typeof v.emoji !== 'string' || !v.emoji.trim() || [...v.emoji].length > 16) throw new Error('Choose an emoji (up to 16 characters).');
   if (typeof v.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(v.color)) throw new Error('Choose a valid six-digit color.');
@@ -32,6 +32,13 @@ export function shift(target: string, zone: string, unit: RepeatUnit, amount: nu
   return unit === 'none' ? anchor.epochMilliseconds
     : anchor.add({ [`${unit}s`]: amount }, { overflow: 'constrain' }).epochMilliseconds;
 }
+function occurrenceIndices(at: (index: number) => number, now: number, lo = 0, hi = 1): Readonly<{lo: number; hi: number}> {
+  const mid = Math.floor((hi + lo) / 2);
+  return at(hi) <= now ? occurrenceIndices(at, now, hi, hi * 2)
+    : hi - lo <= 1 ? {lo, hi}
+    : at(mid) <= now ? occurrenceIndices(at, now, mid, hi)
+    : occurrenceIndices(at, now, lo, mid);
+}
 export function cycle(event: Readonly<EventInput>, now: number) {
   let start = Date.parse(event.startAt), end = Date.parse(event.targetAt);
   if (event.repeatUnit !== 'none') {
@@ -39,9 +46,7 @@ export function cycle(event: Readonly<EventInput>, now: number) {
     if (now < end) start = at(-1);
     else {
       // Find the occurrence using logarithmic search, always relative to the original anchor.
-      let lo = 0, hi = 1;
-      while (at(hi) <= now) { lo = hi; hi *= 2; }
-      while (hi - lo > 1) { const mid = Math.floor((hi + lo) / 2); if (at(mid) <= now) lo = mid; else hi = mid; }
+      const {lo, hi} = occurrenceIndices(at, now);
       start = at(lo); end = at(hi);
     }
   }
@@ -74,5 +79,5 @@ export function starterEvents(zone: string): EventInput[] {
     {title:'The next chapter',emoji:'🎉',color:palette[3],target:day.with({month:1,day:1}).add({years:1}),unit:'year'},
     {title:"St. Patrick’s Day",emoji:'☘️',color:palette[6],target:day.with({month:3,day:17}).add({years:now.month > 3 || (now.month === 3 && now.day >= 17) ? 1 : 0}),unit:'year'}
   ];
-  return examples.map(e=>({title:e.title,emoji:e.emoji,color:e.color,targetAt:e.target.toInstant().toString(),startAt:new Date(shift(e.target.toInstant().toString(),zone,e.unit as RepeatUnit,-1)).toISOString(),repeatUnit:e.unit as RepeatUnit,repeatEvery:1,timeZone:zone}));
+  return examples.map((e): Readonly<EventInput>=>({title:e.title,emoji:e.emoji,color:e.color,targetAt:e.target.toInstant().toString(),startAt:new Date(shift(e.target.toInstant().toString(),zone,e.unit as RepeatUnit,-1)).toISOString(),repeatUnit:e.unit as RepeatUnit,repeatEvery:1,timeZone:zone}));
 }

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CHALLENGE_SECONDS,hash,jsonObject,randomToken,requireAuth,throttle,username,validId,validToken } from './security';
 import type { AppEnv } from './types';
-interface Challenge { id:string; username:string; poll_hash:string; approval_hash:string; session_hash:string; verification_code:string; status:'pending'|'approved'; expires_at:number; target_id:string; family_id:string; }
+interface Challenge { readonly id:string; readonly username:string; readonly poll_hash:string; readonly approval_hash:string; readonly session_hash:string; readonly verification_code:string; readonly status:'pending'|'approved'; readonly expires_at:number; readonly target_id:string; readonly family_id:string; }
 export const auth=new Hono<AppEnv>();
 auth.post('/challenges',async c=>{
  if(!await throttle(c,'start',8))return c.json({error:'Too many login attempts. Please wait a minute.'},429);
@@ -18,7 +18,7 @@ auth.post('/challenges/:id/poll',async c=>{
  if(!await throttle(c,'poll',240))return c.json({error:'Please slow down.'},429);
  const id=c.req.param('id');let input:Record<string,unknown>;try{input=await jsonObject(c);}catch{return c.json({error:'Invalid login request.'},400);}
  if(!validId(id)||!validToken(input.pollToken))return c.json({error:'Invalid login request.'},400);
- const row=await c.env.DB.prepare('SELECT status,expires_at FROM login_challenges WHERE id=? AND poll_hash=?').bind(id,await hash(input.pollToken)).first<{status:string;expires_at:number}>();
+ const row=await c.env.DB.prepare('SELECT status,expires_at FROM login_challenges WHERE id=? AND poll_hash=?').bind(id,await hash(input.pollToken)).first<Readonly<{status:string;expires_at:number}>>();
  if(!row)return c.json({error:'Login request not found.'},404);
  if(row.expires_at<=Math.floor(Date.now()/1000))return c.json({status:'expired'});
  return c.json({status:row.status});
@@ -43,6 +43,6 @@ auth.post('/challenges/:id/approve',requireAuth,async c=>{
  // The database trigger activates the pre-issued session exactly once on pending -> approved.
  await c.env.DB.prepare("UPDATE login_challenges SET status='approved',approved_user_id=?,approved_by=?,approved_at=? WHERE id=? AND status='pending' AND expires_at>?").bind(row.target_id,c.get('identity').user.id,now,row.id,now).run();
  // A repeated approval cannot reactivate a logged-out session.
- const session=await c.env.DB.prepare('SELECT 1 AS active FROM sessions WHERE challenge_id=? AND expires_at>?').bind(row.id,now).first();
+ const session=await c.env.DB.prepare('SELECT 1 AS active FROM sessions WHERE challenge_id=? AND expires_at>?').bind(row.id,now).first<Readonly<{active:number}>>();
  return session?c.json({status:'approved'}):c.json({error:'This login request has expired.'},409);
 });

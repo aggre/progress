@@ -48,7 +48,7 @@ test('operator bootstrap atomically creates one family/user and activates only t
  await assert.rejects(f.bootstrap(c,'wrong-user'));
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM families').first('n'),0);
- const created=await f.bootstrap(c,'first-user');
+ const created:Readonly<{familyId:string;userId:string}>=await f.bootstrap(c,'first-user');
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);assert.equal(response.status,200);
  const identity=await response.json() as Identity;assert.equal(identity.user.id,created.userId);assert.equal(identity.family.id,created.familyId);
  for(const token of [c.pollToken,c.approvalToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
@@ -75,14 +75,14 @@ test('unknown and registered usernames have the same challenge response and secr
 });
 
 test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
- const f=await fixture(t),first=await f.challenge('first-user');const owner=await f.bootstrap(first,'first-user');
+ const f=await fixture(t),first=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
  const added=await add.json() as {user:Identity['user']};assert.equal(added.user.username,'family_member');assert.equal(added.user.familyId,owner.familyId);
  assert.equal((await f.request('/api/family/members','POST',{username:'elsewhere',familyId:'forged-family'},first.sessionToken)).status,400);
  const member=await f.challenge('family_member');
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
  const inspected=await f.request(`/api/auth/challenges/${member.id}/inspect`,'POST',{approvalToken:member.approvalToken},first.sessionToken);assert.equal(inspected.status,200);
- const inspection=await inspected.json() as {username:string;verificationCode:string};assert.equal(inspection.username,'family_member');assert.equal(inspection.verificationCode,member.verificationCode);
+ const inspection=await inspected.json() as Readonly<{username:string;verificationCode:string}>;assert.equal(inspection.username,'family_member');assert.equal(inspection.verificationCode,member.verificationCode);
  const approvals=await Promise.all([1,2].map(()=>f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)));
  assert.deepEqual(approvals.map(r=>r.status),[200,200]);
  for(let i=0;i<2;i++)assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken:member.pollToken})).json(),{status:'approved'});

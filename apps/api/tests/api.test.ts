@@ -114,7 +114,7 @@ test('family members share existing and new schedules while only creators can ch
  assert.equal((await f.request('/api/me','GET',undefined,attempt.sessionToken)).status,401);
  const event:Readonly<EventInput>={title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
  const created=await f.request('/api/schedules','POST',event,first.sessionToken);assert.equal(created.status,201);
- const saved=await created.json() as {event:ScheduleRecord};
+ const saved=await created.json() as Readonly<{event:Readonly<ScheduleRecord>}>;
  assert.equal(saved.event.createdBy.username,'first-user');assert.equal(saved.event.canEdit,true);
  const shared=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};
  assert.equal(shared.events.length,1);assert.equal(shared.events[0].id,saved.event.id);
@@ -135,7 +135,7 @@ test('family members share existing and new schedules while only creators can ch
  const refreshed=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};assert.equal(refreshed.events[0].title,'Updated');
  // Member-created events are shared in the opposite direction, too.
  const memberCreated=await f.request('/api/schedules','POST',{...event,title:'Member event'},member.sessionToken);assert.equal(memberCreated.status,201);
- const memberEvent=((await memberCreated.json()) as {event:ScheduleRecord}).event;
+ const memberEvent=((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event;
  assert.equal(memberEvent.canEdit,true);assert.equal(memberEvent.createdBy.username,'family-member');
  const combined=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
  assert.equal(combined.events.length,2);assert.equal(combined.events.find(e=>e.id===memberEvent.id)?.canEdit,false);
@@ -155,8 +155,8 @@ test('family schedule reads include existing events beyond the former 500-event 
    '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', 'none', 1, 'UTC', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
   FROM numbers`).bind(owner.userId,member.id).run();
  const result=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.equal(result.events.length,501);assert.equal(result.events.filter(e=>e.canEdit).length,500);
- assert.equal(result.events.find(e=>e.createdBy.id===member.id)?.canEdit,false);
+ assert.equal(result.events.length,501);assert.equal(result.events.filter((e:Readonly<ScheduleRecord>)=>e.canEdit).length,500);
+ assert.equal(result.events.find((e:Readonly<ScheduleRecord>)=>e.createdBy.id===member.id)?.canEdit,false);
  // Sharing does not increase a creator's write quota.
  assert.equal((await f.request('/api/schedules','POST',result.events[0],first.sessionToken)).status,409);
 });

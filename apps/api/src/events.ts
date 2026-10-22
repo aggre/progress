@@ -10,7 +10,7 @@ interface Row {
   readonly time_zone: string; readonly created_at: string; readonly updated_at: string;
 }
 
-function map(r: Row, viewer: string): ScheduleRecord {
+function map(r: Row, viewer: string): Readonly<ScheduleRecord> {
   return {
     id: r.id, title: r.title, emoji: r.emoji, color: r.color, startAt: r.start_at,
     targetAt: r.target_at, repeatUnit: r.repeat_unit, repeatEvery: r.repeat_every,
@@ -42,7 +42,7 @@ events.post('/', async c => {
   const result = await c.env.DB.prepare('INSERT INTO events (id,owner_id,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM events WHERE owner_id=?)<500')
     .bind(id, user.id, input.title, input.emoji, input.color, input.startAt, input.targetAt, input.repeatUnit, input.repeatEvery, input.timeZone, stamp, stamp, user.id).run();
   if (!result.meta.changes) return c.json({ error: 'You have reached the limit of 500 events.' }, 409);
-  const event: ScheduleRecord = {
+  const event: Readonly<ScheduleRecord> = {
     id, ...input, createdAt: stamp, updatedAt: stamp,
     createdBy: { id: user.id, username: user.username }, canEdit: true,
   };

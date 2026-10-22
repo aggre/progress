@@ -60,7 +60,7 @@
     window.addEventListener('focus',focus);
     return ()=>{clearInterval(timer);clearTimeout(toastTimer);window.removeEventListener('focus',focus);};
   });
-  async function openEditor(event: ScheduleRecord | null=null) {
+  async function openEditor(event: Readonly<ScheduleRecord> | null=null) {
     if (event && !event.canEdit) return;
     editing=event; formError=''; saving=false;
     zone=event?.timeZone || 'Asia/Tokyo';
@@ -101,7 +101,7 @@
     const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),events},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='little-by-little-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Your events have been exported.');
   }
-  function confirmDelete(e: ScheduleRecord) { deleteEvent=e;formError='';deleteDialog.showModal(); }
+  function confirmDelete(e: Readonly<ScheduleRecord>) { deleteEvent=e;formError='';deleteDialog.showModal(); }
 </script>
 
 <div class="app-shell">

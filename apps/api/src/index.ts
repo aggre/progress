@@ -26,7 +26,7 @@ app.get('/api/family',requireAuth,async c=>{
 });
 app.post('/api/family/members',requireAuth,async c=>{
  const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>=c.get('identity');if(!await throttle(c,'member-add',10,3600,identity.user.id))return c.json({error:'Please try again later.'},429);
- let name:string;try{const data=await jsonObject(c);if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');name=username(data.username);}catch(e){return c.json({error:e instanceof Error?e.message:'Invalid username.'},400);}
+ let name:string;try{const data:Readonly<Record<string,unknown>>=await jsonObject(c);if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');name=username(data.username);}catch(e){return c.json({error:e instanceof Error?e.message:'Invalid username.'},400);}
  const id=crypto.randomUUID();
  try{
   const r=await c.env.DB.prepare('INSERT INTO users (id,username,family_id) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM users WHERE family_id=?)<50').bind(id,name,identity.family.id,identity.family.id).run();

@@ -7,7 +7,7 @@ export interface ScheduleEvent {
   targetAt: string; repeatUnit: RepeatUnit; repeatEvery: number; timeZone: string;
   createdAt: string; updatedAt: string;
 }
-export type EventInput = Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>;
+export type EventInput = Readonly<Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>>;
 export const palette = ['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'];
 export function validateEvent(raw: unknown): EventInput {
   if (!raw || typeof raw !== 'object') throw new Error('Please enter an event.');
@@ -39,17 +39,17 @@ function occurrenceIndices(at: (index: number) => number, now: number, lo = 0, h
     : at(mid) <= now ? occurrenceIndices(at, now, mid, hi)
     : occurrenceIndices(at, now, lo, mid);
 }
+function occurrenceBounds(at: (index: number) => number, now: number): Readonly<{start: number; end: number}> {
+  // Find the occurrence using logarithmic search, always relative to the original anchor.
+  const {lo, hi} = occurrenceIndices(at, now);
+  return {start: at(lo), end: at(hi)};
+}
 export function cycle(event: Readonly<EventInput>, now: number) {
-  let start = Date.parse(event.startAt), end = Date.parse(event.targetAt);
-  if (event.repeatUnit !== 'none') {
-    const at = (n: number) => shift(event.targetAt, event.timeZone, event.repeatUnit, n * event.repeatEvery);
-    if (now < end) start = at(-1);
-    else {
-      // Find the occurrence using logarithmic search, always relative to the original anchor.
-      const {lo, hi} = occurrenceIndices(at, now);
-      start = at(lo); end = at(hi);
-    }
-  }
+  const initialStart = Date.parse(event.startAt), initialEnd = Date.parse(event.targetAt);
+  const at = (n: number) => shift(event.targetAt, event.timeZone, event.repeatUnit, n * event.repeatEvery);
+  const {start, end} = event.repeatUnit === 'none' ? {start: initialStart, end: initialEnd}
+    : now < initialEnd ? {start: at(-1), end: initialEnd}
+    : occurrenceBounds(at, now);
   const progress = clamp(0, 100, (now - start) / (end - start) * 100);
   return { start, end, progress, remaining: Math.max(0, end - now), complete: event.repeatUnit === 'none' && now >= end, upcoming: now < start } as const;
 }

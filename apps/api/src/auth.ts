@@ -25,7 +25,7 @@ auth.post('/challenges/:id/poll',async c=>{
 });
 auth.post('/logout',requireAuth,async c=>{await c.env.DB.prepare('UPDATE sessions SET expires_at=0 WHERE token_hash=?').bind(c.get('sessionHash')).run();return c.json({ok:true});});
 async function approval(c: Parameters<typeof jsonObject>[0]) {
- const id=c.req.param('id');const input=await jsonObject(c);
+ const id=c.req.param('id');const input:Readonly<Record<string,unknown>>=await jsonObject(c);
  if(!validId(id)||!validToken(input.approvalToken))return null;
  return c.env.DB.prepare('SELECT l.*,u.id AS target_id,u.family_id FROM login_challenges l JOIN users u ON u.username=l.username COLLATE NOCASE WHERE l.id=? AND l.approval_hash=? AND u.family_id=? AND l.expires_at>unixepoch()').bind(id,await hash(input.approvalToken),c.get('identity').family.id).first<Challenge>();
 }

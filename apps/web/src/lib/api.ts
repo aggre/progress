@@ -5,11 +5,17 @@ export const STORAGE_NAMESPACE = `little-by-little:${API_BASE_URL}:${BASE_PATH}`
 const sessionKey = `${STORAGE_NAMESPACE}:session`;
 export const SESSION_EXPIRED_EVENT = 'little-by-little:session-expired';
 
+// eslint-disable-next-line functional/functional-parameters -- Read the ambient browser session from localStorage.
 export function getSession(): string | null {
+  // eslint-disable-next-line functional/no-try-statements -- Unavailable browser storage means this device has no readable session.
   try { return localStorage.getItem(sessionKey); } catch { return null; }
 }
 export function saveSession(token: string) { localStorage.setItem(sessionKey, token); }
-export function clearSession() { try { localStorage.removeItem(sessionKey); } catch { /* Already unavailable. */ } }
+// eslint-disable-next-line functional/functional-parameters -- Sign-out clears the ambient browser session.
+export function clearSession() {
+  // eslint-disable-next-line functional/no-try-statements -- Browser storage may be unavailable during sign-out.
+  try { localStorage.removeItem(sessionKey); } catch { /* Already unavailable. */ }
+}
 export function sessionStorageKey(value: string) { return `${STORAGE_NAMESPACE}:${value}`; }
 
 export class ApiError extends Error {

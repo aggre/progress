@@ -34,9 +34,13 @@
   const hasApproval = $derived(Boolean(approval));
 
   function storageRead<T>(key: string): T | null {
+    // eslint-disable-next-line functional/no-try-statements -- Browser session storage may be unavailable or contain invalid persisted JSON.
     try { const value = sessionStorage.getItem(key); return value ? JSON.parse(value) as T : null; } catch { return null; }
   }
-  function storageRemove(key: string) { try { sessionStorage.removeItem(key); } catch { /* No stored value to remove. */ } }
+  function storageRemove(key: string) {
+    // eslint-disable-next-line functional/no-try-statements -- Removing transient browser state remains safe when storage is unavailable.
+    try { sessionStorage.removeItem(key); } catch { /* No stored value to remove. */ }
+  }
   function stopPolling() { pollGeneration += 1; if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined; }
   function clearPending() { stopPolling(); pending = null; qrImage = ''; expired = false; storageRemove(challengeKey); }
   function validSecret(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value); }
@@ -54,6 +58,7 @@
       const intent: ApprovalIntent = { id: raw.slice(0, separator), approvalToken: raw.slice(separator + 1) };
       if (separator > 0 && validId(intent.id) && validSecret(intent.approvalToken)) {
         approval = intent;
+        // eslint-disable-next-line functional/no-try-statements -- Approval can continue in memory when browser session storage rejects a write.
         try { sessionStorage.setItem(approvalKey, JSON.stringify(intent)); } catch { /* Current tab can still approve. */ }
       } else { approvalError = 'This approval link is not valid.'; }
     } else {
@@ -123,6 +128,7 @@
       const challenge = await api<LoginChallenge>('/api/auth/challenges', 'POST', { username: normalized }, null);
       pending = { ...challenge, username: normalized };
       await makeQr(challenge);
+      // eslint-disable-next-line functional/no-try-statements -- Login can continue in this tab when browser session storage rejects a write.
       try { sessionStorage.setItem(challengeKey, JSON.stringify(pending)); } catch { /* Continue in this tab if browser storage is unavailable. */ }
       now = Date.now(); startPolling();
     } catch (e) { clearPending(); error = e instanceof Error ? e.message : 'Unable to start sign-in.'; }

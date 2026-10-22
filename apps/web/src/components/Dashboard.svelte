@@ -40,10 +40,10 @@
   const active = $derived(rows.filter(e=>!e.timing.complete));
   const repeatingCount = $derived(events.filter((e:Readonly<ScheduleRecord>)=>e.repeatUnit !== 'none').length);
   const visible = $derived.by(()=>{
-    let list = rows.filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && e.title.toLowerCase().includes(query.toLowerCase()));
-    if (sort === 'soonest') list = sortBy((event: EventRow)=>event.timing.end,list);
-    if (sort === 'name') list = sortRows((a: EventRow,b: EventRow)=>a.title.localeCompare(b.title),list);
-    return list;
+    const list = rows.filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && e.title.toLowerCase().includes(query.toLowerCase()));
+    return sort === 'soonest' ? sortBy((event: EventRow)=>event.timing.end,list)
+      : sort === 'name' ? sortRows((a: EventRow,b: EventRow)=>a.title.localeCompare(b.title),list)
+      : list;
   });
   const next = $derived(sortBy((event: EventRow)=>event.timing.end,active)[0]);
   const clockDate = $derived(new Intl.DateTimeFormat('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'Asia/Tokyo'}).format(now));

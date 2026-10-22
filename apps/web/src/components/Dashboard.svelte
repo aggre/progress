@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { sortBy } from 'ramda';
   import { cycle, remainingText, repeatLabel, palette, units, shift, toLocal, fromLocal, starterEvents, type EventInput, type RepeatUnit } from '@little/shared/events';
 
   import type { Identity, ScheduleRecord } from '@little/shared/api';
   import { api, BASE_PATH } from '../lib/api';
+  type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
 
   let events = $state<ScheduleRecord[]>([]);
@@ -33,7 +35,7 @@
   let seeding = $state(false);
   const emojis = ['✨','🎯','🌿','☀️','🌙','🎉','🎂','✈️','📚','💻','🏃','☕','❤️','☘️','⏱️','🏖️'];
   const timeZones = [...new Set(['Asia/Tokyo', Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC', ...Intl.supportedValuesOf('timeZone')])];
-  const rows = $derived(events.map((e:Readonly<ScheduleRecord>)=>({...e, timing:cycle(e,now)})));
+  const rows = $derived(events.map((e:Readonly<ScheduleRecord>): EventRow=>({...e, timing:cycle(e,now)})));
   const completed = $derived(rows.filter(e=>e.timing.complete).length);
   const active = $derived(rows.filter(e=>!e.timing.complete));
   const repeatingCount = $derived(events.filter((e:Readonly<ScheduleRecord>)=>e.repeatUnit !== 'none').length);
@@ -43,7 +45,7 @@
     if (sort === 'name') list = list.toSorted((a,b)=>a.title.localeCompare(b.title));
     return list;
   });
-  const next = $derived(active.toSorted((a,b)=>a.timing.end-b.timing.end)[0]);
+  const next = $derived(sortBy((event: EventRow)=>event.timing.end,active)[0]);
   const clockDate = $derived(new Intl.DateTimeFormat('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'Asia/Tokyo'}).format(now));
   const clockTime = $derived(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Tokyo'}).format(now));
   function dateLabel(value: number, timeZone: string) { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZone}).format(value); }

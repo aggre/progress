@@ -75,7 +75,7 @@ The intended project URL is `https://aggre.github.io/progress/`. GitHub Pages se
 ## Schedule behavior
 
 - Event name, emoji, target date, and per-event color; create, edit, delete, search, filters, and sorting.
-- One-time countdowns with a configurable start date, or repetition every N minutes, hours, days, weeks, months, or years.
+- One-time countdowns start automatically when created and keep their start time when edited. Recurring events repeat every N minutes, hours, days, weeks, months, or years.
 - Event-specific IANA time zones. Calendar repeats follow local daylight-saving changes.
 - Month-end and leap-day dates remain anchored: January 31 becomes February 28, then March 31; February 29 returns in leap years.
 - Events are shared with everyone in the creator's family. Only the creator can edit or delete an event. Family membership also authorizes login approval and member management.

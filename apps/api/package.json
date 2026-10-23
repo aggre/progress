@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@little/shared": "2.0.0",
-    "hono": "latest"
+    "hono": "latest",
+    "ramda": "^0.32.0"
   }
 }

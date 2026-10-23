@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { always } from 'ramda';
 import { CHALLENGE_SECONDS,hash,jsonObject,randomToken,requireAuth,throttle,username,validId,validToken } from './security';
 import type { AppEnv } from './types';
 interface Challenge { readonly id:string; readonly username:string; readonly poll_hash:string; readonly approval_hash:string; readonly session_hash:string; readonly verification_code:string; readonly status:'pending'|'approved'; readonly expires_at:number; readonly target_id:string; readonly family_id:string; }
@@ -18,13 +19,14 @@ auth.post('/challenges',async c=>{
 // eslint-disable-next-line functional/no-expression-statements -- Register the login polling HTTP endpoint with the Hono router.
 auth.post('/challenges/:id/poll',async c=>{
  if(!await throttle(c,'poll',240))return c.json({error:'Please slow down.'},429);
- const id=c.req.param('id');let input:Record<string,unknown>;try{input=await jsonObject(c);}catch{return c.json({error:'Invalid login request.'},400);}
- if(!validId(id)||!validToken(input.pollToken))return c.json({error:'Invalid login request.'},400);
+ const id=c.req.param('id');const input=await jsonObject(c).catch(always(null));
+ if(!input||!validId(id)||!validToken(input.pollToken))return c.json({error:'Invalid login request.'},400);
  const row=await c.env.DB.prepare('SELECT status,expires_at FROM login_challenges WHERE id=? AND poll_hash=?').bind(id,await hash(input.pollToken)).first<Readonly<{status:string;expires_at:number}>>();
  return !row ? c.json({error:'Login request not found.'},404)
   : row.expires_at<=Math.floor(Date.now()/1000) ? c.json({status:'expired'})
   : c.json({status:row.status});
 });
+// eslint-disable-next-line functional/no-expression-statements -- Register the session logout HTTP endpoint with the Hono router.
 auth.post('/logout',requireAuth,async c=>{
  // eslint-disable-next-line functional/no-expression-statements -- Invalidate the authenticated session in D1 at the logout persistence boundary.
  await c.env.DB.prepare('UPDATE sessions SET expires_at=0 WHERE token_hash=?').bind(c.get('sessionHash')).run();
@@ -38,14 +40,16 @@ async function approval(c: Parameters<typeof jsonObject>[0]) {
 // eslint-disable-next-line functional/no-expression-statements -- Register the approval inspection HTTP endpoint with the Hono router.
 auth.post('/challenges/:id/inspect',requireAuth,async c=>{
  if(!await throttle(c,'inspect',60))return c.json({error:'Please slow down.'},429);
- let row:Challenge|null;try{row=await approval(c);}catch{return c.json({error:'Invalid approval request.'},400);}
- return !row ? c.json({error:'This request is unavailable, expired, or outside your family.'},404)
+ const row=await approval(c).catch(always(undefined));
+ return row===undefined ? c.json({error:'Invalid approval request.'},400)
+  : !row ? c.json({error:'This request is unavailable, expired, or outside your family.'},404)
   : c.json({username:row.username,verificationCode:row.verification_code,expiresAt:row.expires_at*1000});
 });
 auth.post('/challenges/:id/approve',requireAuth,async c=>{
  if(!await throttle(c,'approve',30))return c.json({error:'Please slow down.'},429);
- let row:Challenge|null;try{row=await approval(c);}catch{return c.json({error:'Invalid approval request.'},400);}
- if(!row)return c.json({error:'This request is unavailable, expired, or outside your family.'},404);
+ const row=await approval(c).catch(always(undefined));
+ if(!row)return row===undefined ? c.json({error:'Invalid approval request.'},400)
+  : c.json({error:'This request is unavailable, expired, or outside your family.'},404);
  const now=Math.floor(Date.now()/1000);
  // The database trigger activates the pre-issued session exactly once on pending -> approved.
  // eslint-disable-next-line functional/no-expression-statements -- Persist the login approval in D1 so its trigger activates the pre-issued session.

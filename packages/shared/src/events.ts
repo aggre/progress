@@ -38,9 +38,9 @@ export function validateEvent(raw: unknown): EventInput {
       : { title: title.trim(), emoji: emoji.trim(), color: color.toLowerCase(), startAt: Temporal.Instant.fromEpochNanoseconds(start).toString(), targetAt: Temporal.Instant.fromEpochNanoseconds(target).toString(), repeatUnit, repeatEvery, timeZone };
 }
 export function shift(target: string, zone: string, unit: RepeatUnit, amount: number): number {
-  const anchor = Temporal.Instant.from(target).toZonedDateTimeISO(zone);
-  return unit === 'none' ? anchor.epochMilliseconds
-    : anchor.add({ [`${unit}s`]: amount }, { overflow: 'constrain' }).epochMilliseconds;
+  return unit === 'none'
+    ? Temporal.Instant.from(target).toZonedDateTimeISO(zone).epochMilliseconds
+    : Temporal.Instant.from(target).toZonedDateTimeISO(zone).add({ [`${unit}s`]: amount }, { overflow: 'constrain' }).epochMilliseconds;
 }
 function occurrenceIndices(at: (index: number) => number, now: number, lo = 0, hi = 1): Readonly<{lo: number; hi: number}> {
   const mid = Math.floor((hi + lo) / 2);

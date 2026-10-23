@@ -9,13 +9,16 @@ export interface ScheduleEvent {
 }
 export type EventInput = Readonly<Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>>;
 export const palette = ['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'];
+function invalidEvent(message: string): never { throw new Error(message); }
 export function validateEvent(raw: unknown): EventInput {
-  if (!raw || typeof raw !== 'object') throw new Error('Please enter an event.');
-  const v = raw as Readonly<Record<string, unknown>>;
-  if (typeof v.title !== 'string' || !v.title.trim() || v.title.trim().length > 100) throw new Error('Use an event name between 1 and 100 characters.');
-  if (typeof v.emoji !== 'string' || !v.emoji.trim() || [...v.emoji].length > 16) throw new Error('Choose an emoji (up to 16 characters).');
-  if (typeof v.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(v.color)) throw new Error('Choose a valid six-digit color.');
-  if (!units.includes(v.repeatUnit as RepeatUnit)) throw new Error('Choose a valid repeat period.');
+  const v = !raw || typeof raw !== 'object' ? invalidEvent('Please enter an event.') : raw as Readonly<Record<string, unknown>>;
+  const title = typeof v.title !== 'string' || !v.title.trim() || v.title.trim().length > 100
+    ? invalidEvent('Use an event name between 1 and 100 characters.') : v.title;
+  const emoji = typeof v.emoji !== 'string' || !v.emoji.trim() || [...v.emoji].length > 16
+    ? invalidEvent('Choose an emoji (up to 16 characters).') : v.emoji;
+  const color = typeof v.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(v.color)
+    ? invalidEvent('Choose a valid six-digit color.') : v.color;
+  const repeatUnit = units.includes(v.repeatUnit as RepeatUnit) ? v.repeatUnit as RepeatUnit : invalidEvent('Choose a valid repeat period.');
   if (!Number.isInteger(v.repeatEvery) || Number(v.repeatEvery) < 1 || Number(v.repeatEvery) > 1000) throw new Error('Repeat every 1 to 1,000 periods.');
   if (typeof v.timeZone !== 'string' || v.timeZone.length > 80) throw new Error('Choose a valid time zone.');
   try { Temporal.Now.zonedDateTimeISO(v.timeZone); } catch { throw new Error('Choose a valid time zone.'); }
@@ -25,7 +28,7 @@ export function validateEvent(raw: unknown): EventInput {
   if (Temporal.Instant.compare(start, target) >= 0) throw new Error('The target must be after the start.');
   // Limit the supported date range so recurrence arithmetic remains predictable.
   if (start.toZonedDateTimeISO(v.timeZone).year < 1900 || target.toZonedDateTimeISO(v.timeZone).year > 2200) throw new Error('Choose dates between 1900 and 2200.');
-  return { title: v.title.trim(), emoji: v.emoji.trim(), color: v.color.toLowerCase(), startAt: start.toString(), targetAt: target.toString(), repeatUnit: v.repeatUnit as RepeatUnit, repeatEvery: Number(v.repeatEvery), timeZone: v.timeZone };
+  return { title: title.trim(), emoji: emoji.trim(), color: color.toLowerCase(), startAt: start.toString(), targetAt: target.toString(), repeatUnit, repeatEvery: Number(v.repeatEvery), timeZone: v.timeZone };
 }
 export function shift(target: string, zone: string, unit: RepeatUnit, amount: number): number {
   const anchor = Temporal.Instant.from(target).toZonedDateTimeISO(zone);

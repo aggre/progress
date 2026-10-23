@@ -57,14 +57,18 @@
   // eslint-disable-next-line functional/functional-parameters -- Load schedules for the current browser session through the API.
   async function load() {
     error='';
+    // eslint-disable-next-line functional/no-try-statements -- Handle schedule API failures and always clear the browser loading state.
     try { const result = await api<{ events: ScheduleRecord[] }>('/api/schedules'); events=result.events; } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
     finally { loading=false; }
   }
   onMount(()=>{
     void load();
+    // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native interval handle for component cleanup.
     const timer = setInterval(()=>now=Date.now(),1000);
-    const focus = ()=>{ now=Date.now(); if (!dialog?.open && !deleteDialog?.open && !saving && !seeding) void load(); };
+    // eslint-disable-next-line functional/functional-parameters -- Refresh browser time and schedules when the window gains focus.
+    const focus = ()=>{ now=Date.now(); void (!dialog?.open && !deleteDialog?.open && !saving && !seeding && load()); };
     window.addEventListener('focus',focus);
+    // eslint-disable-next-line functional/functional-parameters -- Component cleanup cancels browser timers and removes the window listener.
     return ()=>{clearInterval(timer);clearTimeout(toastTimer);window.removeEventListener('focus',focus);};
   });
   async function openEditor(event: Readonly<ScheduleRecord> | null=null) {
@@ -85,6 +89,7 @@
   }
   async function save(event: SubmitEvent) {
     event.preventDefault(); if (saving) return; saving=true;formError='';
+    // eslint-disable-next-line functional/no-try-statements -- Handle event API failures and restore the browser saving state.
     try {
       const targetAt=fromLocal(targetLocal,zone);
       const startAt=repeatUnit === 'none' ? editing?.startAt ?? new Date().toISOString() : new Date(shift(targetAt,zone,repeatUnit,-repeatEvery)).toISOString();
@@ -97,18 +102,23 @@
   // eslint-disable-next-line functional/functional-parameters -- Delete the currently selected schedule through the API and close its browser dialog.
   async function remove() {
     if (!deleteEvent || saving) return; saving=true; formError='';
+    // eslint-disable-next-line functional/no-try-statements -- Handle deletion API failures and restore the browser saving state.
     try { await api('/api/schedules/'+deleteEvent.id,'DELETE');events=events.filter((e:Readonly<ScheduleRecord>)=>e.id!==deleteEvent?.id);deleteDialog.close();notify('Event deleted.'); }
     catch(e) {formError=e instanceof Error ? e.message : 'Unable to delete.';}finally{saving=false;}
   }
   // eslint-disable-next-line functional/functional-parameters -- Create starter schedules through the API for the current browser session.
   async function seed() {
     seeding=true;error='';
+    // eslint-disable-next-line functional/no-try-statements -- Handle starter event API failures and restore the browser seeding state.
     try { for (const input of starterEvents('Asia/Tokyo')) { const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules','POST',input);events=[...events,result.event]; } notify('Your everyday countdowns are ready.'); }
     catch(e){error=e instanceof Error ? e.message : 'Unable to add starter events.';}finally{seeding=false;}
   }
+  // eslint-disable-next-line functional/functional-parameters -- Download the current browser schedules using a temporary DOM link.
   function exportEvents() {
     const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),events},null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='little-by-little-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Your events have been exported.');
+    const url=URL.createObjectURL(blob);
+    // eslint-disable-next-line functional/prefer-immutable-types -- The native anchor must be configured and clicked to download the export.
+    const a=document.createElement('a');a.href=url;a.download='little-by-little-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Your events have been exported.');
   }
   function confirmDelete(e: Readonly<ScheduleRecord>) { deleteEvent=e;formError='';deleteDialog.showModal(); }
 </script>

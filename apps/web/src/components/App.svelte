@@ -24,6 +24,7 @@
   let approved = $state(false);
   let approvalError = $state('');
   let familyOpen = $state(false);
+  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native browser timer handle so login polling can be cancelled.
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let pollGeneration = 0;
   let failures = 0;
@@ -73,6 +74,7 @@
   async function loadIdentity() {
     const token = getSession();
     if (!token) { identity = null; checking = false; return; }
+    // eslint-disable-next-line functional/no-try-statements -- Handle identity API failures and always clear the browser session-check state.
     try {
       const verified = await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, token);
       if (getSession() !== token) return;
@@ -95,6 +97,7 @@
     if (!challenge || generation !== pollGeneration) return;
     now = Date.now();
     if (challenge.expiresAt <= now) { expired = true; stopPolling(); storageRemove(challengeKey); return; }
+    // eslint-disable-next-line functional/no-try-statements -- Handle polling API failures so the browser can report the error and schedule a retry.
     try {
       const result = await api<LoginStatus>(`/api/auth/challenges/${challenge.id}/poll`, 'POST', { pollToken: challenge.pollToken }, null);
       if (generation !== pollGeneration) return;
@@ -128,6 +131,7 @@
   async function startLogin(event: SubmitEvent) {
     event.preventDefault(); if (busy) return;
     busy = true; error = ''; notice = ''; clearPending();
+    // eslint-disable-next-line functional/no-try-statements -- Handle challenge API and QR generation failures and always clear the browser busy state.
     try {
       const normalized = username.trim().toLowerCase();
       const challenge = await api<LoginChallenge>('/api/auth/challenges', 'POST', { username: normalized }, null);
@@ -143,6 +147,7 @@
   async function inspectApproval() {
     if (!approval || !identity) return;
     approvalLoading = true; approvalError = ''; approvalDetails = null;
+    // eslint-disable-next-line functional/no-try-statements -- Handle approval inspection API failures and always clear the browser loading state.
     try { approvalDetails = await api<PendingApproval>(`/api/auth/challenges/${approval.id}/inspect`, 'POST', { approvalToken: approval.approvalToken }); }
     catch (e) { approvalError = e instanceof Error ? e.message : 'Unable to check this sign-in request.'; }
     finally { approvalLoading = false; }
@@ -151,6 +156,7 @@
   async function approve() {
     if (!approval || !approvalDetails || busy) return;
     busy = true; approvalError = '';
+    // eslint-disable-next-line functional/no-try-statements -- Handle approval API failures and always clear the browser busy state.
     try {
       await api(`/api/auth/challenges/${approval.id}/approve`, 'POST', { approvalToken: approval.approvalToken });
       approved = true; storageRemove(approvalKey);
@@ -160,6 +166,7 @@
   function leaveApproval() { approval = null; approvalDetails = null; approvalError = ''; approved = false; storageRemove(approvalKey); }
   // eslint-disable-next-line functional/functional-parameters -- Revoke the current API session and clear browser storage and timers.
   async function logout() {
+    // eslint-disable-next-line functional/no-try-statements -- Complete local browser sign-out even when the session revocation API fails.
     try { await api('/api/auth/logout', 'POST', {}); }
     catch { /* Local sign-out still removes this device's access. */ }
     clearSession(); identity = null; familyOpen = false; clearPending(); notice = 'You’re signed out.';

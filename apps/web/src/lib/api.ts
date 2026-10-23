@@ -31,9 +31,9 @@ export async function api<T = { ok: boolean }>(path: string, method = 'GET', dat
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(15000) });
   } catch { throw new ApiError('Unable to reach the service. Please try again.', 0); }
-  let result: T & { error?: string };
-  try { result = await response.json() as T & { error?: string }; }
-  catch { throw new ApiError('The service returned an unexpected response. Please try again.', response.status); }
+  const result = await response.json().catch(() => {
+    throw new ApiError('The service returned an unexpected response. Please try again.', response.status);
+  }) as T & { error?: string };
   if (!response.ok) {
     if (response.status === 401 && token && token === getSession()) {
       clearSession();

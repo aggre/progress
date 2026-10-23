@@ -71,7 +71,7 @@
       if (stored && validId(stored.id) && validSecret(stored.approvalToken)) approval = stored;
     }
   }
-  // eslint-disable-next-line functional/functional-parameters -- Load the identity for the current browser session through the API.
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Load the identity for the current browser session through the API. This browser API operation returns its native completion Promise.
   async function loadIdentity() {
     const token = getSession();
     if (!token) { identity = null; checking = false; return; }
@@ -88,12 +88,14 @@
       else error = e instanceof Error ? e.message : 'Unable to check your session.';
     } finally { checking = false; }
   }
+  // eslint-disable-next-line functional/prefer-immutable-types -- The QR image browser operation returns its native completion Promise.
   async function makeQr(challenge: LoginChallenge) {
     // eslint-disable-next-line functional/prefer-immutable-types -- Configure the approval fragment on the browser URL before encoding it as a QR image.
     const url = new SvelteURL(BASE_PATH, location.origin);
     url.hash = `approve=${challenge.id}.${challenge.approvalToken}`;
     qrImage = await QRCode.toDataURL(url.toString(), { width: 276, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#344333', light: '#fffefa' } });
   }
+  // eslint-disable-next-line functional/prefer-immutable-types -- This browser API operation returns its native completion Promise.
   async function poll(generation: number) {
     const challenge = pending;
     if (!challenge || generation !== pollGeneration) return;
@@ -130,6 +132,7 @@
     const generation = pollGeneration;
     pollTimer = setTimeout(() => { void poll(generation); }, Math.max(3000, pending?.pollInterval || 3000));
   }
+  // eslint-disable-next-line functional/prefer-immutable-types -- The browser form handler consumes its native SubmitEvent and returns the API completion Promise.
   async function startLogin(event: SubmitEvent) {
     event.preventDefault(); if (busy) return;
     busy = true; error = ''; notice = ''; clearPending();
@@ -145,7 +148,7 @@
     } catch (e) { clearPending(); error = e instanceof Error ? e.message : 'Unable to start sign-in.'; }
     finally { busy = false; }
   }
-  // eslint-disable-next-line functional/functional-parameters -- Inspect the current QR approval request through the API.
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Inspect the current QR approval request through the API. This browser API operation returns its native completion Promise.
   async function inspectApproval() {
     if (!approval || !identity) return;
     approvalLoading = true; approvalError = ''; approvalDetails = null;
@@ -154,7 +157,7 @@
     catch (e) { approvalError = e instanceof Error ? e.message : 'Unable to check this sign-in request.'; }
     finally { approvalLoading = false; }
   }
-  // eslint-disable-next-line functional/functional-parameters -- Submit the current approval to the API and clear its tab storage.
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Submit the current approval to the API and clear its tab storage. This browser API operation returns its native completion Promise.
   async function approve() {
     if (!approval || !approvalDetails || busy) return;
     busy = true; approvalError = '';
@@ -167,7 +170,7 @@
   }
   // eslint-disable-next-line functional/functional-parameters -- Close the current browser approval view and clear its tab storage.
   function leaveApproval() { approval = null; approvalDetails = null; approvalError = ''; approved = false; storageRemove(approvalKey); }
-  // eslint-disable-next-line functional/functional-parameters -- Revoke the current API session and clear browser storage and timers.
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Revoke the current API session and clear browser storage and timers. This browser API operation returns its native completion Promise.
   async function logout() {
     // eslint-disable-next-line functional/no-try-statements -- Complete local browser sign-out even when the session revocation API fails.
     try { await api('/api/auth/logout', 'POST', {}); }

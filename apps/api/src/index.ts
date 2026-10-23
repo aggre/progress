@@ -55,6 +55,7 @@ app.post('/api/family/members',requireAuth,async c=>{
   : {error:'Please try again later.'} as const;
  if(!allowed||typeof name!=='string')return c.json(name,allowed?400:429);
  const id=crypto.randomUUID();
+ // eslint-disable-next-line functional/no-try-statements -- Translate D1 username conflicts at the family member persistence boundary.
  try{
   const {meta:{changes}}:Readonly<{meta:Readonly<{changes:number}>}>=await c.env.DB.prepare('INSERT INTO users (id,username,family_id) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM users WHERE family_id=?)<50').bind(id,name,identity.family.id,identity.family.id).run();
   if(!changes)return c.json({error:'This family has reached its limit of 50 members.'},409);

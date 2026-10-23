@@ -21,25 +21,23 @@ export function sessionStorageKey(value: string) { return `${STORAGE_NAMESPACE}:
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); this.name = 'ApiError'; }
 }
+function apiFailure(message: string, status: number): never { throw new ApiError(message, status); }
 export async function api<T = { ok: boolean }>(path: string, method = 'GET', data?: unknown, token: string | null = getSession()): Promise<T> {
   const headers: Readonly<Record<string, string>> = {
     Accept: 'application/json',
     ...(data !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+  // eslint-disable-next-line functional/prefer-immutable-types -- Fetch returns the native Response whose body is consumed once at this network boundary.
   let response: Response;
+  // eslint-disable-next-line functional/no-try-statements -- Translate fetch and request serialization failures into the browser API error contract.
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(15000) });
-  } catch { throw new ApiError('Unable to reach the service. Please try again.', 0); }
-  const result = await response.json().catch(() => {
-    throw new ApiError('The service returned an unexpected response. Please try again.', response.status);
-  }) as T & { error?: string };
-  if (!response.ok) {
-    if (response.status === 401 && token && token === getSession()) {
-      clearSession();
-      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
-    }
-    throw new ApiError(result.error || 'Unable to complete this request. Please try again.', response.status);
+  } catch { return apiFailure('Unable to reach the service. Please try again.', 0); }
+  const result = await response.json().catch(() => apiFailure('The service returned an unexpected response. Please try again.', response.status)) as T & { error?: string };
+  if (!response.ok && response.status === 401 && token && token === getSession()) {
+    clearSession();
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
   }
-  return result;
+  return response.ok ? result : apiFailure(result.error || 'Unable to complete this request. Please try again.', response.status);
 }

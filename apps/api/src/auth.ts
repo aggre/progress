@@ -47,6 +47,7 @@ auth.post('/challenges/:id/inspect',requireAuth,async c=>{
   : !row ? c.json({error:'This request is unavailable, expired, or outside your family.'},404)
   : c.json({username:row.username,verificationCode:row.verification_code,expiresAt:row.expires_at*1000});
 });
+// eslint-disable-next-line functional/no-expression-statements -- Register the login approval HTTP endpoint with the Hono router.
 auth.post('/challenges/:id/approve',requireAuth,async c=>{
  if(!await throttle(c,'approve',30))return c.json({error:'Please slow down.'},429);
  const row=await approval(c).catch(always(undefined));

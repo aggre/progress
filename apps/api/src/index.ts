@@ -6,6 +6,7 @@ import { events } from './events';
 import { jsonObject,requireAuth,throttle,username } from './security';
 import type { AppEnv,ApiBindings } from './types';
 const app=new Hono<AppEnv>();
+// eslint-disable-next-line functional/no-expression-statements -- Register the HTTP origin and response-header middleware with the Hono router.
 app.use('*',async(c,next)=>{
  const origin=c.req.header('Origin');
  // eslint-disable-next-line functional/no-expression-statements -- Write the HTTP response cache policy at the Hono response boundary.
@@ -45,6 +46,7 @@ app.get('/api/family',requireAuth,async c=>{
  const family=c.get('identity').family;
  const r=await c.env.DB.prepare('SELECT id,username,family_id AS familyId FROM users WHERE family_id=? ORDER BY created_at,id LIMIT 50').bind(family.id).all();return c.json({family,members:r.results});
 });
+// eslint-disable-next-line functional/no-expression-statements -- Register the family member creation HTTP endpoint with the Hono router.
 app.post('/api/family/members',requireAuth,async c=>{
  const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>=c.get('identity');if(!await throttle(c,'member-add',10,3600,identity.user.id))return c.json({error:'Please try again later.'},429);
  let name:string;try{const data:Readonly<Record<string,unknown>>=await jsonObject(c);if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');name=username(data.username);}catch(e){return c.json({error:e instanceof Error?e.message:'Invalid username.'},400);}
@@ -56,11 +58,19 @@ app.post('/api/family/members',requireAuth,async c=>{
  return c.json({user:{id,username:name,familyId:identity.family.id}},201);
 });
 // Use a schedule-specific path; /api/events on workers.dev matches EasyPrivacy.
+// eslint-disable-next-line functional/no-expression-statements -- Mount schedule HTTP endpoints on the Hono router.
 app.route('/api/schedules',events);
 // Retain the old route while existing browser bundles refresh.
+// eslint-disable-next-line functional/no-expression-statements -- Mount the legacy schedule HTTP alias on the Hono router.
 app.route('/api/events',events);
+// eslint-disable-next-line functional/no-expression-statements -- Register the unmatched-request HTTP response handler with the Hono router.
 app.notFound(c=>c.json({error:'Not found.'},404));
-app.onError((error,c)=>{console.error(JSON.stringify({event:'request_failed',type:error.name}));return c.json({error:'Something went wrong. Please try again.'},500);});
+// eslint-disable-next-line functional/no-expression-statements -- Register the HTTP error response handler with the Hono router.
+app.onError((error,c)=>{
+ // eslint-disable-next-line functional/no-expression-statements -- Report request failures through the Worker logging boundary without sensitive request data.
+ console.error(JSON.stringify({event:'request_failed',type:error.name}));
+ return c.json({error:'Something went wrong. Please try again.'},500);
+});
 export {app};
 export default {
  fetch:app.fetch,

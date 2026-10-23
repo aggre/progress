@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { always } from 'ramda';
+import { always, prop } from 'ramda';
 import { CHALLENGE_SECONDS,hash,jsonObject,randomToken,requireAuth,throttle,username,validId,validToken } from './security';
 import type { AppEnv } from './types';
 interface Challenge { readonly id:string; readonly username:string; readonly poll_hash:string; readonly approval_hash:string; readonly session_hash:string; readonly verification_code:string; readonly status:'pending'|'approved'; readonly expires_at:number; readonly target_id:string; readonly family_id:string; }
@@ -7,8 +7,10 @@ export const auth=new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements -- Register the login challenge HTTP endpoint with the Hono router.
 auth.post('/challenges',async c=>{
  if(!await throttle(c,'start',8))return c.json({error:'Too many login attempts. Please wait a minute.'},429);
- let name:string;try{name=username((await jsonObject(c)).username);}catch(e){return c.json({error:e instanceof Error?e.message:'Invalid username.'},400);}
- if(!await throttle(c,'username-start',8,60,name))return c.json({error:'Too many login attempts. Please wait a minute.'},429);
+ const name=await jsonObject(c).then(prop('username')).then(username)
+  .catch((e:unknown):Readonly<{error:string}>=>({error:e instanceof Error?e.message:'Invalid username.'}));
+ if(typeof name!=='string'||!await throttle(c,'username-start',8,60,name))return typeof name!=='string'
+  ? c.json(name,400) : c.json({error:'Too many login attempts. Please wait a minute.'},429);
  const id=crypto.randomUUID(),pollToken=randomToken(),approvalToken=randomToken(),sessionToken=randomToken(),verificationCode=randomToken(5).slice(0,6).toUpperCase();
  const now=Math.floor(Date.now()/1000),expiresAt=now+CHALLENGE_SECONDS;
  // Do not look up the username here: registered and unknown names have the same response.

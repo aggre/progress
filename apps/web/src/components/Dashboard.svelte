@@ -87,7 +87,10 @@
     repeatEvery = choice === 'two-weeks' ? 2 : getRepeatChoice() === 'two-weeks' ? 1 : repeatEvery;
     repeatUnit = choice === 'two-weeks' ? 'week' : choice;
   }
-  async function save(event: SubmitEvent) {
+  async function save(
+    // eslint-disable-next-line functional/prefer-immutable-types -- Prevent native form submission before sending the edited schedule through the API.
+    event: SubmitEvent,
+  ) {
     event.preventDefault(); if (saving) return; saving=true;formError='';
     // eslint-disable-next-line functional/no-try-statements -- Handle event API failures and restore the browser saving state.
     try {
@@ -115,6 +118,7 @@
   }
   // eslint-disable-next-line functional/functional-parameters -- Download the current browser schedules using a temporary DOM link.
   function exportEvents() {
+    // eslint-disable-next-line functional/prefer-immutable-types -- The native Blob carries the browser download payload.
     const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),events},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     // eslint-disable-next-line functional/prefer-immutable-types -- The native anchor must be configured and clicked to download the export.
@@ -174,12 +178,15 @@
     <div class="form-grid repeat-row"><label>Repeats<select aria-label="Repeats" bind:value={getRepeatChoice, setRepeatChoice}>{#each units as unit}<option value={unit}>{unit==='none' ? 'Does not repeat' : `Every ${unit}`}</option>{#if unit==='week'}<option value="two-weeks">Every 2 weeks</option>{/if}{/each}</select></label>{#if repeatUnit!=='none'}<label>Every<input type="number" bind:value={repeatEvery} min="1" max="1000" required aria-label="Repeat interval"/></label>{/if}</div>
     {#if repeatUnit!=='none'}<p class="field-hint">The bar fills from the previous occurrence to the next, then starts again. Month-end dates stay anchored.</p>{/if}
     <label class="field-label">Time zone<select aria-label="Time zone" bind:value={zone}>{#each timeZones as tz}<option value={tz}>{tz.replaceAll('_',' ')}</option>{/each}</select></label><p class="field-hint">Dates use this time zone. Daylight-saving changes follow the local clock.</p>
+<!-- eslint-disable-next-line functional/functional-parameters -- Update the browser event editor color from its picker button. -->
     <fieldset class="color-field"><legend>Make it your color</legend><div class="color-picker">{#each palette as swatch}<button type="button" class:color-selected={color===swatch} style={`--swatch:${swatch}`} aria-label={`Use color ${swatch}`} aria-pressed={color===swatch} onclick={()=>color=swatch}>{color===swatch ? '✓' : ''}</button>{/each}<label class="custom-color" title="Choose any color"><input type="color" bind:value={color} aria-label="Custom bar color"/><span>＋</span></label></div></fieldset>
     <div class="mini-preview"><span>{emoji} {title || 'Your next little moment'}</span><div style={`background:${color}`}></div></div>
     {#if formError}<p class="form-error" role="alert">{formError}</p>{/if}
+<!-- eslint-disable-next-line functional/functional-parameters -- Browser dialog buttons open deletion confirmation or cancel editing. -->
     <div class="dialog-footer">{#if editing}<button type="button" class="danger-button" disabled={saving} onclick={()=>confirmDelete(editing!)}>Delete event</button>{:else}<span></span>{/if}<div><button type="button" class="secondary" disabled={saving} onclick={()=>dialog.close()}>Cancel</button><button class="primary" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create event'}</button></div></div>
   </form>
 </dialog>
+<!-- eslint-disable-next-line functional/functional-parameters -- Browser confirmation buttons close the native dialogs or delete the selected schedule. -->
 <dialog bind:this={deleteDialog} class="delete-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}><h2>Let this moment go?</h2><p>“{deleteEvent?.title}” will be permanently deleted.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div><button class="secondary" disabled={saving} onclick={()=>deleteDialog.close()}>Keep it</button><button class="delete-confirm" disabled={saving} onclick={async()=>{await remove();return !deleteDialog.open ? dialog.close() : undefined;}}>{saving ? 'Deleting…' : 'Delete event'}</button></div></dialog>
 {#if toast}<div class="toast" role="status"><span>✓</span>{toast}</div>{/if}
 

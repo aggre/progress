@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { SvelteURL } from 'svelte/reactivity';
   import QRCode from 'qrcode';
   import type { Identity, LoginChallenge, LoginStatus, PendingApproval } from '@little/shared/api';
   import { api, ApiError, BASE_PATH, STORAGE_NAMESPACE, SESSION_EXPIRED_EVENT, clearSession, getSession, saveSession, sessionStorageKey } from '../lib/api';
@@ -88,7 +89,8 @@
     } finally { checking = false; }
   }
   async function makeQr(challenge: LoginChallenge) {
-    const url = new URL(BASE_PATH, location.origin);
+    // eslint-disable-next-line functional/prefer-immutable-types -- Configure the approval fragment on the browser URL before encoding it as a QR image.
+    const url = new SvelteURL(BASE_PATH, location.origin);
     url.hash = `approve=${challenge.id}.${challenge.approvalToken}`;
     qrImage = await QRCode.toDataURL(url.toString(), { width: 276, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#344333', light: '#fffefa' } });
   }
@@ -240,6 +242,7 @@
             <div class="waiting-line" role="status"><span class:expired-dot={expired} class="live-dot"></span>{expired ? 'This code has expired.' : `Waiting for your family · ${minutesRemaining}`}</div>
             {#if !expired}<p class="small-description">This page will update automatically after approval.</p>{/if}
             <details class="request-details"><summary>Request details</summary><p>For a first sign-in, share this request ID and matching code with your system administrator.</p><label>Request ID<input readonly value={pending.id} aria-label="Login request ID" /></label></details>
+      <!-- eslint-disable-next-line functional/functional-parameters -- Cancel or restart the browser sign-in flow and clear its pending state. -->
             <button class="secondary full-width" disabled={busy} onclick={() => { clearPending(); error = ''; }}>{expired ? 'Try again' : 'Use another username'}</button>
           {:else}
             <p class="description">A familiar face is your key.<br/>Enter your username to ask your family to let you in.</p>

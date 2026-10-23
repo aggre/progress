@@ -1,4 +1,4 @@
-const configuredApi: string = import.meta.env.PUBLIC_API_BASE_URL || 'http://127.0.0.1:8787';
+const configuredApi: string = (typeof import.meta.env.PUBLIC_API_BASE_URL === 'string' && import.meta.env.PUBLIC_API_BASE_URL) || 'http://127.0.0.1:8787';
 export const API_BASE_URL = configuredApi.replace(/\/+$/, '');
 export const BASE_PATH = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 export const STORAGE_NAMESPACE = `little-by-little:${API_BASE_URL}:${BASE_PATH}`;

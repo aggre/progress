@@ -12,6 +12,10 @@ interface Row {
   readonly time_zone: string; readonly created_at: string; readonly updated_at: string;
 }
 
+function validationFailure(error: unknown): Readonly<{ error: string }> {
+  return { error: error instanceof Error ? error.message : 'Invalid event.' };
+}
+
 function map(r: Row, viewer: string): Readonly<ScheduleRecord> {
   return {
     id: r.id, title: r.title, emoji: r.emoji, color: r.color, startAt: r.start_at,
@@ -39,10 +43,10 @@ events.get('/', async c => {
 // eslint-disable-next-line functional/no-expression-statements -- Register the schedule creation HTTP endpoint with the Hono router.
 events.post('/', async c => {
   const user: Readonly<User> = c.get('identity').user;
-  if (!await throttle(c, 'event-write', 60, 60, user.id)) return c.json({ error: 'Please slow down.' }, 429);
-  let input;
-  try { input = validateEvent(await jsonObject(c)); }
-  catch (e) { return c.json({ error: e instanceof Error ? e.message : 'Invalid event.' }, 400); }
+  const allowed = await throttle(c, 'event-write', 60, 60, user.id);
+  const input = allowed ? await jsonObject(c).then(validateEvent).catch(validationFailure)
+    : { error: 'Please slow down.' } as const;
+  if (!allowed || 'error' in input) return c.json(input, allowed ? 400 : 429);
   const id = crypto.randomUUID(), stamp = new Date().toISOString();
   const result: WriteResult = await c.env.DB.prepare('INSERT INTO events (id,owner_id,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM events WHERE owner_id=?)<500')
     .bind(id, user.id, input.title, input.emoji, input.color, input.startAt, input.targetAt, input.repeatUnit, input.repeatEvery, input.timeZone, stamp, stamp, user.id).run();
@@ -57,10 +61,10 @@ events.post('/', async c => {
 // eslint-disable-next-line functional/no-expression-statements -- Register the schedule update HTTP endpoint with the Hono router.
 events.put('/:id', async c => {
   const owner = c.get('identity').user.id;
-  if (!await throttle(c, 'event-write', 60, 60, owner)) return c.json({ error: 'Please slow down.' }, 429);
-  let input;
-  try { input = validateEvent(await jsonObject(c)); }
-  catch (e) { return c.json({ error: e instanceof Error ? e.message : 'Invalid event.' }, 400); }
+  const allowed = await throttle(c, 'event-write', 60, 60, owner);
+  const input = allowed ? await jsonObject(c).then(validateEvent).catch(validationFailure)
+    : { error: 'Please slow down.' } as const;
+  if (!allowed || 'error' in input) return c.json(input, allowed ? 400 : 429);
   const id = c.req.param('id'), stamp = new Date().toISOString();
   const result: WriteResult = await c.env.DB.prepare('UPDATE events SET title=?,emoji=?,color=?,start_at=?,target_at=?,repeat_unit=?,repeat_every=?,time_zone=?,updated_at=? WHERE id=? AND owner_id=?')
     .bind(input.title, input.emoji, input.color, input.startAt, input.targetAt, input.repeatUnit, input.repeatEvery, input.timeZone, stamp, id, owner).run();

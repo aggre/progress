@@ -3,6 +3,7 @@
   import type { Identity, Family, User } from '@little/shared/api';
   import { api } from '../lib/api';
   let { identity, onclose }: { identity: Identity; onclose: () => void } = $props();
+  // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native dialog element at the DOM boundary.
   let dialog: HTMLDialogElement;
   let members = $state<User[]>([]);
   let family = $state<Family | null>(null);
@@ -11,8 +12,10 @@
   let username = $state('');
   let error = $state('');
   let notice = $state('');
+  // eslint-disable-next-line functional/functional-parameters -- Load the current family through the API during the component lifecycle.
   async function load() {
     loading = true; error = '';
+    // eslint-disable-next-line functional/no-try-statements -- Handle family API failures and always clear the browser loading state.
     try { const result = await api<{ family: Family; members: User[] }>('/api/family'); family = result.family; members = result.members; }
     catch (e) { error = e instanceof Error ? e.message : 'Unable to load your family.'; }
     finally { loading = false; }
@@ -20,6 +23,7 @@
   async function add(event: SubmitEvent) {
     event.preventDefault(); if (saving) return;
     saving = true; error = ''; notice = '';
+    // eslint-disable-next-line functional/no-try-statements -- Handle member creation API failures and always clear the browser saving state.
     try {
       const result = await api<Readonly<{ user: Readonly<User> }>>('/api/family/members', 'POST', { username: username.trim().toLowerCase() });
       members = [...members, result.user]; username = '';

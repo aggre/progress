@@ -163,6 +163,7 @@
     } catch (e) { approvalError = e instanceof Error ? e.message : 'Unable to approve. Please try again.'; }
     finally { busy = false; }
   }
+  // eslint-disable-next-line functional/functional-parameters -- Close the current browser approval view and clear its tab storage.
   function leaveApproval() { approval = null; approvalDetails = null; approvalError = ''; approved = false; storageRemove(approvalKey); }
   // eslint-disable-next-line functional/functional-parameters -- Revoke the current API session and clear browser storage and timers.
   async function logout() {
@@ -179,13 +180,17 @@
       void makeQr(stored).then(startPolling).catch(() => { clearPending(); error = 'Unable to restore the sign-in request. Please try again.'; });
     } else storageRemove(challengeKey);
     void loadIdentity();
+    // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native interval handle so component cleanup can cancel it.
     const timer = setInterval(() => { now = Date.now(); if (pending && pending.expiresAt <= now) { expired = true; stopPolling(); storageRemove(challengeKey); } }, 1000);
+    // eslint-disable-next-line functional/functional-parameters -- Handle the browser session-expiration event by clearing its signed-in view.
     const sessionExpired = () => { identity = null; familyOpen = false; notice = 'Your session has ended. Ask your family to approve a new sign-in.'; };
+    // eslint-disable-next-line functional/prefer-immutable-types -- Read the native browser StorageEvent to synchronize sign-in state between tabs.
     const storageChanged = (event: StorageEvent) => {
       if (event.key === `${STORAGE_NAMESPACE}:session`) { identity = null; checking = true; void loadIdentity(); }
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, sessionExpired);
     window.addEventListener('storage', storageChanged);
+    // eslint-disable-next-line functional/functional-parameters -- Component cleanup cancels browser polling and removes window listeners.
     return () => { stopPolling(); clearInterval(timer); window.removeEventListener(SESSION_EXPIRED_EVENT, sessionExpired); window.removeEventListener('storage', storageChanged); };
   });
 </script>
@@ -195,8 +200,12 @@
 {#if checking}
   <main class="checking" aria-live="polite"><span class="brand-symbol" aria-hidden="true">⌛</span><p>One little moment…</p></main>
 {:else if identity && !hasApproval}
+  <!-- eslint-disable-next-line functional/functional-parameters -- Browser button callbacks sign out or open the family dialog for this session. -->
   <Dashboard {identity} onlogout={() => { void logout(); }} onfamily={() => { familyOpen = true; }} />
-  {#if familyOpen}<FamilyPanel {identity} onclose={() => { familyOpen = false; }} />{/if}
+  {#if familyOpen}
+    <!-- eslint-disable-next-line functional/functional-parameters -- Handle the family dialog close event in the browser view. -->
+    <FamilyPanel {identity} onclose={() => { familyOpen = false; }} />
+  {/if}
 {:else}
   <div class="auth-shell">
     <header class="auth-topbar"><a class="brand" href={BASE_PATH}><span class="brand-symbol" aria-hidden="true">⌛</span><span>little by little<span class="brand-dot">.</span></span></a><span class="quiet-label">AT YOUR OWN PACE</span></header>

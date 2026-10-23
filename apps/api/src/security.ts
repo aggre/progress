@@ -15,11 +15,11 @@ export function memberUsername(data:Readonly<Record<string,unknown>>):string {
 }
 export function validId(value: string | undefined): value is string {return typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);}
 export function validToken(value: unknown): value is string{return typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);}
-export async function jsonObject(c: Context<AppEnv>): Promise<Record<string,unknown>> {
+export async function jsonObject(c: Context<AppEnv>): Promise<Readonly<Record<string,unknown>>> {
  const value: unknown=c.req.header('Content-Type')?.startsWith('application/json')
   ? await c.req.json() : invalidInput('Expected JSON.');
  return value&&typeof value==='object'&&!Array.isArray(value)
-  ? value as Record<string,unknown> : invalidInput('Expected a JSON object.');
+  ? value as Readonly<Record<string,unknown>> : invalidInput('Expected a JSON object.');
 }
 export async function throttle(c: Context<AppEnv>,scope: string,limit: number,period=60,identifier?:string){
  const now=Math.floor(Date.now()/1000),window=Math.floor(now/period);
@@ -36,6 +36,7 @@ export const requireAuth:MiddlewareHandler<AppEnv>=async(c,next)=>{
  const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>={user:{id:row.id,username:row.username,familyId:row.family_id},family:{id:row.family_id,name:row.family_name}};
  // eslint-disable-next-line functional/no-expression-statements -- Store the verified identity in the current Hono request context.
  c.set('identity',identity);
+ // eslint-disable-next-line functional/no-expression-statements -- Store the verified session hash in the current Hono request context for logout.
  c.set('sessionHash',tokenHash);
  // eslint-disable-next-line functional/no-expression-statements -- Dispatch the authenticated request to downstream Hono middleware.
  await next();

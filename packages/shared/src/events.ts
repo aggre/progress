@@ -19,16 +19,19 @@ export function validateEvent(raw: unknown): EventInput {
   const color = typeof v.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(v.color)
     ? invalidEvent('Choose a valid six-digit color.') : v.color;
   const repeatUnit = units.includes(v.repeatUnit as RepeatUnit) ? v.repeatUnit as RepeatUnit : invalidEvent('Choose a valid repeat period.');
-  if (!Number.isInteger(v.repeatEvery) || Number(v.repeatEvery) < 1 || Number(v.repeatEvery) > 1000) throw new Error('Repeat every 1 to 1,000 periods.');
-  if (typeof v.timeZone !== 'string' || v.timeZone.length > 80) throw new Error('Choose a valid time zone.');
-  try { Temporal.Now.zonedDateTimeISO(v.timeZone); } catch { throw new Error('Choose a valid time zone.'); }
-  if (typeof v.startAt !== 'string' || typeof v.targetAt !== 'string') throw new Error('Choose valid dates.');
+  const repeatEvery = !Number.isInteger(v.repeatEvery) || Number(v.repeatEvery) < 1 || Number(v.repeatEvery) > 1000
+    ? invalidEvent('Repeat every 1 to 1,000 periods.') : Number(v.repeatEvery);
+  const timeZone = typeof v.timeZone !== 'string' || v.timeZone.length > 80 ? invalidEvent('Choose a valid time zone.') : v.timeZone;
+  try { Temporal.Now.zonedDateTimeISO(timeZone); } catch { throw new Error('Choose a valid time zone.'); }
+  const {startAt, targetAt} = typeof v.startAt !== 'string' || typeof v.targetAt !== 'string'
+    ? invalidEvent('Choose valid dates.') : {startAt: v.startAt, targetAt: v.targetAt};
   let start: Temporal.Instant, target: Temporal.Instant;
-  try { start = Temporal.Instant.from(v.startAt); target = Temporal.Instant.from(v.targetAt); } catch { throw new Error('Choose valid dates.'); }
-  if (Temporal.Instant.compare(start, target) >= 0) throw new Error('The target must be after the start.');
+  try { start = Temporal.Instant.from(startAt); target = Temporal.Instant.from(targetAt); } catch { throw new Error('Choose valid dates.'); }
   // Limit the supported date range so recurrence arithmetic remains predictable.
-  if (start.toZonedDateTimeISO(v.timeZone).year < 1900 || target.toZonedDateTimeISO(v.timeZone).year > 2200) throw new Error('Choose dates between 1900 and 2200.');
-  return { title: title.trim(), emoji: emoji.trim(), color: color.toLowerCase(), startAt: start.toString(), targetAt: target.toString(), repeatUnit, repeatEvery: Number(v.repeatEvery), timeZone: v.timeZone };
+  return Temporal.Instant.compare(start, target) >= 0 ? invalidEvent('The target must be after the start.')
+    : start.toZonedDateTimeISO(timeZone).year < 1900 || target.toZonedDateTimeISO(timeZone).year > 2200
+      ? invalidEvent('Choose dates between 1900 and 2200.')
+      : { title: title.trim(), emoji: emoji.trim(), color: color.toLowerCase(), startAt: start.toString(), targetAt: target.toString(), repeatUnit, repeatEvery, timeZone };
 }
 export function shift(target: string, zone: string, unit: RepeatUnit, amount: number): number {
   const anchor = Temporal.Instant.from(target).toZonedDateTimeISO(zone);

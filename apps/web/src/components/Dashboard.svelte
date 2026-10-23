@@ -16,7 +16,9 @@
   let query = $state('');
   let sort = $state('custom');
   let showCompleted = $state(false);
+  // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native event editor dialog at the DOM boundary.
   let dialog: HTMLDialogElement;
+  // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native input used to focus the event editor.
   let nameInput: HTMLInputElement;
   let editing = $state<Readonly<ScheduleRecord> | null>(null);
   let saving = $state(false);
@@ -29,8 +31,10 @@
   let zone = $state('Asia/Tokyo');
   let targetLocal = $state('');
   let deleteEvent = $state<Readonly<ScheduleRecord> | null>(null);
+  // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native confirmation dialog at the DOM boundary.
   let deleteDialog: HTMLDialogElement;
   let toast = $state('');
+  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native timer handle so the browser toast can be cancelled.
   let toastTimer: ReturnType<typeof setTimeout>;
   let seeding = $state(false);
   const emojis = ['✨','🎯','🌿','☀️','🌙','🎉','🎂','✈️','📚','💻','🏃','☕','❤️','☘️','⏱️','🏖️'];
@@ -50,6 +54,7 @@
   const clockTime = $derived(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Tokyo'}).format(now));
   function dateLabel(value: number, timeZone: string) { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZone}).format(value); }
   function notify(message: string) { toast=message; clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast='',4000); }
+  // eslint-disable-next-line functional/functional-parameters -- Load schedules for the current browser session through the API.
   async function load() {
     error='';
     try { const result = await api<{ events: ScheduleRecord[] }>('/api/schedules'); events=result.events; } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
@@ -89,11 +94,13 @@
       dialog.close();notify(editing ? 'Event updated.' : 'A little something to look forward to.');
     } catch(e) { formError=e instanceof Error ? e.message : 'Unable to save.'; } finally { saving=false; }
   }
+  // eslint-disable-next-line functional/functional-parameters -- Delete the currently selected schedule through the API and close its browser dialog.
   async function remove() {
     if (!deleteEvent || saving) return; saving=true; formError='';
     try { await api('/api/schedules/'+deleteEvent.id,'DELETE');events=events.filter((e:Readonly<ScheduleRecord>)=>e.id!==deleteEvent?.id);deleteDialog.close();notify('Event deleted.'); }
     catch(e) {formError=e instanceof Error ? e.message : 'Unable to delete.';}finally{saving=false;}
   }
+  // eslint-disable-next-line functional/functional-parameters -- Create starter schedules through the API for the current browser session.
   async function seed() {
     seeding=true;error='';
     try { for (const input of starterEvents('Asia/Tokyo')) { const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules','POST',input);events=[...events,result.event]; } notify('Your everyday countdowns are ready.'); }

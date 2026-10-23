@@ -5,6 +5,10 @@ import { auth } from './auth';
 import { events } from './events';
 import { jsonObject,requireAuth,throttle,username } from './security';
 import type { AppEnv,ApiBindings } from './types';
+function memberUsername(data:Readonly<Record<string,unknown>>):string {
+ if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');
+ return username(data.username);
+}
 const app=new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements -- Register the HTTP origin and response-header middleware with the Hono router.
 app.use('*',async(c,next)=>{
@@ -48,8 +52,12 @@ app.get('/api/family',requireAuth,async c=>{
 });
 // eslint-disable-next-line functional/no-expression-statements -- Register the family member creation HTTP endpoint with the Hono router.
 app.post('/api/family/members',requireAuth,async c=>{
- const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>=c.get('identity');if(!await throttle(c,'member-add',10,3600,identity.user.id))return c.json({error:'Please try again later.'},429);
- let name:string;try{const data:Readonly<Record<string,unknown>>=await jsonObject(c);if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');name=username(data.username);}catch(e){return c.json({error:e instanceof Error?e.message:'Invalid username.'},400);}
+ const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>=c.get('identity');
+ const allowed=await throttle(c,'member-add',10,3600,identity.user.id);
+ const name=allowed ? await jsonObject(c).then(memberUsername)
+  .catch((e:unknown):Readonly<{error:string}>=>({error:e instanceof Error?e.message:'Invalid username.'}))
+  : {error:'Please try again later.'} as const;
+ if(!allowed||typeof name!=='string')return c.json(name,allowed?400:429);
  const id=crypto.randomUUID();
  try{
   const {meta:{changes}}:Readonly<{meta:Readonly<{changes:number}>}>=await c.env.DB.prepare('INSERT INTO users (id,username,family_id) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM users WHERE family_id=?)<50').bind(id,name,identity.family.id,identity.family.id).run();

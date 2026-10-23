@@ -32,10 +32,15 @@ app.use('*',async(c,next)=>{
  // eslint-disable-next-line functional/no-expression-statements -- Dispatch the request to downstream Hono middleware after writing response headers.
  await next();
 });
+// eslint-disable-next-line functional/no-expression-statements -- Register the HTTP request body limit middleware with the Hono router.
 app.use('/api/*',bodyLimit({maxSize:8192,onError:c=>c.json({error:'Request is too large.'},413)}));
+// eslint-disable-next-line functional/no-expression-statements -- Register the health check HTTP endpoint with the Hono router.
 app.get('/health',c=>c.json({ok:true}));
+// eslint-disable-next-line functional/no-expression-statements -- Mount authentication HTTP endpoints on the Hono router.
 app.route('/api/auth',auth);
+// eslint-disable-next-line functional/no-expression-statements -- Register the current identity HTTP endpoint with the Hono router.
 app.get('/api/me',requireAuth,c=>c.json(c.get('identity')));
+// eslint-disable-next-line functional/no-expression-statements -- Register the family listing HTTP endpoint with the Hono router.
 app.get('/api/family',requireAuth,async c=>{
  const family=c.get('identity').family;
  const r=await c.env.DB.prepare('SELECT id,username,family_id AS familyId FROM users WHERE family_id=? ORDER BY created_at,id LIMIT 50').bind(family.id).all();return c.json({family,members:r.results});
@@ -45,8 +50,8 @@ app.post('/api/family/members',requireAuth,async c=>{
  let name:string;try{const data:Readonly<Record<string,unknown>>=await jsonObject(c);if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');name=username(data.username);}catch(e){return c.json({error:e instanceof Error?e.message:'Invalid username.'},400);}
  const id=crypto.randomUUID();
  try{
-  const r=await c.env.DB.prepare('INSERT INTO users (id,username,family_id) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM users WHERE family_id=?)<50').bind(id,name,identity.family.id,identity.family.id).run();
-  if(!r.meta.changes)return c.json({error:'This family has reached its limit of 50 members.'},409);
+  const {meta:{changes}}:Readonly<{meta:Readonly<{changes:number}>}>=await c.env.DB.prepare('INSERT INTO users (id,username,family_id) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM users WHERE family_id=?)<50').bind(id,name,identity.family.id,identity.family.id).run();
+  if(!changes)return c.json({error:'This family has reached its limit of 50 members.'},409);
  }catch(e){if(e instanceof Error&&e.message.includes('UNIQUE'))return c.json({error:'That username is not available.'},409);throw e;}
  return c.json({user:{id,username:name,familyId:identity.family.id}},201);
 });

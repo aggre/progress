@@ -11,8 +11,8 @@ auth.post('/challenges',async c=>{
  const id=crypto.randomUUID(),pollToken=randomToken(),approvalToken=randomToken(),sessionToken=randomToken(),verificationCode=randomToken(5).slice(0,6).toUpperCase();
  const now=Math.floor(Date.now()/1000),expiresAt=now+CHALLENGE_SECONDS;
  // Do not look up the username here: registered and unknown names have the same response.
- const r=await c.env.DB.prepare('INSERT INTO login_challenges (id,username,poll_hash,approval_hash,session_hash,verification_code,created_at,expires_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM login_challenges WHERE expires_at>?)<1000').bind(id,name,await hash(pollToken),await hash(approvalToken),await hash(sessionToken),verificationCode,now,expiresAt,now).run();
- return !r.meta.changes ? c.json({error:'Please try again later.'},429)
+ const {meta:{changes}}:Readonly<{meta:Readonly<{changes:number}>}>=await c.env.DB.prepare('INSERT INTO login_challenges (id,username,poll_hash,approval_hash,session_hash,verification_code,created_at,expires_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM login_challenges WHERE expires_at>?)<1000').bind(id,name,await hash(pollToken),await hash(approvalToken),await hash(sessionToken),verificationCode,now,expiresAt,now).run();
+ return !changes ? c.json({error:'Please try again later.'},429)
   : c.json({id,pollToken,sessionToken,approvalToken,expiresAt:expiresAt*1000,pollInterval:3000,verificationCode},201);
 });
 // eslint-disable-next-line functional/no-expression-statements -- Register the login polling HTTP endpoint with the Hono router.

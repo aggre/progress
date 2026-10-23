@@ -14,6 +14,10 @@ function instantNanoseconds(value: string): bigint {
   try { return Temporal.Instant.from(value).epochNanoseconds; }
   catch { return invalidEvent('Choose valid dates.'); }
 }
+function validTimeZone(value: string): boolean {
+  try { return Boolean(Temporal.Instant.fromEpochNanoseconds(0n).toZonedDateTimeISO(value).timeZoneId); }
+  catch { return false; }
+}
 export function validateEvent(raw: unknown): EventInput {
   const v = !raw || typeof raw !== 'object' ? invalidEvent('Please enter an event.') : raw as Readonly<Record<string, unknown>>;
   const title = typeof v.title !== 'string' || !v.title.trim() || v.title.trim().length > 100
@@ -25,8 +29,7 @@ export function validateEvent(raw: unknown): EventInput {
   const repeatUnit = units.includes(v.repeatUnit as RepeatUnit) ? v.repeatUnit as RepeatUnit : invalidEvent('Choose a valid repeat period.');
   const repeatEvery = !Number.isInteger(v.repeatEvery) || Number(v.repeatEvery) < 1 || Number(v.repeatEvery) > 1000
     ? invalidEvent('Repeat every 1 to 1,000 periods.') : Number(v.repeatEvery);
-  const timeZone = typeof v.timeZone !== 'string' || v.timeZone.length > 80 ? invalidEvent('Choose a valid time zone.') : v.timeZone;
-  try { Temporal.Now.zonedDateTimeISO(timeZone); } catch { return invalidEvent('Choose a valid time zone.'); }
+  const timeZone = typeof v.timeZone !== 'string' || v.timeZone.length > 80 || !validTimeZone(v.timeZone) ? invalidEvent('Choose a valid time zone.') : v.timeZone;
   const {startAt, targetAt} = typeof v.startAt !== 'string' || typeof v.targetAt !== 'string'
     ? invalidEvent('Choose valid dates.') : {startAt: v.startAt, targetAt: v.targetAt};
   // Keep parsed instants as immutable nanoseconds throughout validation.

@@ -12,7 +12,7 @@
   let username = $state('');
   let error = $state('');
   let notice = $state('');
-  // eslint-disable-next-line functional/functional-parameters -- Load the current family through the API during the component lifecycle.
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Load the current family through the API during the component lifecycle. This browser dialog or API operation returns its native completion Promise.
   async function load() {
     loading = true; error = '';
     // eslint-disable-next-line functional/no-try-statements -- Handle family API failures and always clear the browser loading state.
@@ -20,6 +20,7 @@
     catch (e) { error = e instanceof Error ? e.message : 'Unable to load your family.'; }
     finally { loading = false; }
   }
+  // eslint-disable-next-line functional/prefer-immutable-types -- The browser form handler consumes its native SubmitEvent and returns the API completion Promise.
   async function add(event: SubmitEvent) {
     event.preventDefault(); if (saving) return;
     saving = true; error = ''; notice = '';

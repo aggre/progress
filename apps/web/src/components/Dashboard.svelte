@@ -54,7 +54,7 @@
   const clockTime = $derived(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Tokyo'}).format(now));
   function dateLabel(value: number, timeZone: string) { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZone}).format(value); }
   function notify(message: string) { toast=message; clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast='',4000); }
-  // eslint-disable-next-line functional/functional-parameters -- Load schedules for the current browser session through the API.
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Load schedules for the current browser session through the API. This browser dialog or API operation returns its native completion Promise.
   async function load() {
     error='';
     // eslint-disable-next-line functional/no-try-statements -- Handle schedule API failures and always clear the browser loading state.
@@ -71,6 +71,7 @@
     // eslint-disable-next-line functional/functional-parameters -- Component cleanup cancels browser timers and removes the window listener.
     return ()=>{clearInterval(timer);clearTimeout(toastTimer);window.removeEventListener('focus',focus);};
   });
+  // eslint-disable-next-line functional/prefer-immutable-types -- This browser dialog or API operation returns its native completion Promise.
   async function openEditor(event: Readonly<ScheduleRecord> | null=null) {
     if (event && !event.canEdit) return;
     editing=event; formError=''; saving=false;
@@ -87,6 +88,7 @@
     repeatEvery = choice === 'two-weeks' ? 2 : getRepeatChoice() === 'two-weeks' ? 1 : repeatEvery;
     repeatUnit = choice === 'two-weeks' ? 'week' : choice;
   }
+  // eslint-disable-next-line functional/prefer-immutable-types -- This browser dialog or API operation returns its native completion Promise.
   async function save(
     // eslint-disable-next-line functional/prefer-immutable-types -- Prevent native form submission before sending the edited schedule through the API.
     event: SubmitEvent,
@@ -167,6 +169,7 @@
   <footer class="site-footer"><span>little by little<span class="brand-dot">.</span><span class="footer-separator">/</span>At your own pace.</span><div><button onclick={exportEvents} disabled={!events.length}>Export events ↗</button><button onclick={onlogout}>Sign out ↗</button></div></footer>
 </div>
 
+<!-- eslint-disable-next-line functional/prefer-immutable-types -- Read the native cancel Event to prevent closing the browser editor while saving. -->
 <dialog bind:this={dialog} class="event-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}>
   <form onsubmit={save}>
   <!-- eslint-disable-next-line functional/functional-parameters -- Close the native event editor from its browser close button. -->
@@ -186,7 +189,7 @@
     <div class="dialog-footer">{#if editing}<button type="button" class="danger-button" disabled={saving} onclick={()=>confirmDelete(editing!)}>Delete event</button>{:else}<span></span>{/if}<div><button type="button" class="secondary" disabled={saving} onclick={()=>dialog.close()}>Cancel</button><button class="primary" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create event'}</button></div></div>
   </form>
 </dialog>
-<!-- eslint-disable-next-line functional/functional-parameters -- Browser confirmation buttons close the native dialogs or delete the selected schedule. -->
+<!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Browser confirmation buttons close the native dialogs or delete the selected schedule.  The cancel Event and deletion completion Promise belong to the native browser boundary. -->
 <dialog bind:this={deleteDialog} class="delete-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}><h2>Let this moment go?</h2><p>“{deleteEvent?.title}” will be permanently deleted.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div><button class="secondary" disabled={saving} onclick={()=>deleteDialog.close()}>Keep it</button><button class="delete-confirm" disabled={saving} onclick={async()=>{await remove();return !deleteDialog.open ? dialog.close() : undefined;}}>{saving ? 'Deleting…' : 'Delete event'}</button></div></dialog>
 {#if toast}<div class="toast" role="status"><span>✓</span>{toast}</div>{/if}
 

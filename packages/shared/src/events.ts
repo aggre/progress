@@ -10,6 +10,10 @@ export interface ScheduleEvent {
 export type EventInput = Readonly<Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>>;
 export const palette = ['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'];
 function invalidEvent(message: string): never { throw new Error(message); }
+function instantNanoseconds(value: string): bigint {
+  try { return Temporal.Instant.from(value).epochNanoseconds; }
+  catch { return invalidEvent('Choose valid dates.'); }
+}
 export function validateEvent(raw: unknown): EventInput {
   const v = !raw || typeof raw !== 'object' ? invalidEvent('Please enter an event.') : raw as Readonly<Record<string, unknown>>;
   const title = typeof v.title !== 'string' || !v.title.trim() || v.title.trim().length > 100
@@ -22,16 +26,16 @@ export function validateEvent(raw: unknown): EventInput {
   const repeatEvery = !Number.isInteger(v.repeatEvery) || Number(v.repeatEvery) < 1 || Number(v.repeatEvery) > 1000
     ? invalidEvent('Repeat every 1 to 1,000 periods.') : Number(v.repeatEvery);
   const timeZone = typeof v.timeZone !== 'string' || v.timeZone.length > 80 ? invalidEvent('Choose a valid time zone.') : v.timeZone;
-  try { Temporal.Now.zonedDateTimeISO(timeZone); } catch { throw new Error('Choose a valid time zone.'); }
+  try { Temporal.Now.zonedDateTimeISO(timeZone); } catch { return invalidEvent('Choose a valid time zone.'); }
   const {startAt, targetAt} = typeof v.startAt !== 'string' || typeof v.targetAt !== 'string'
     ? invalidEvent('Choose valid dates.') : {startAt: v.startAt, targetAt: v.targetAt};
-  let start: Temporal.Instant, target: Temporal.Instant;
-  try { start = Temporal.Instant.from(startAt); target = Temporal.Instant.from(targetAt); } catch { throw new Error('Choose valid dates.'); }
+  // Keep parsed instants as immutable nanoseconds throughout validation.
+  const start = instantNanoseconds(startAt), target = instantNanoseconds(targetAt);
   // Limit the supported date range so recurrence arithmetic remains predictable.
-  return Temporal.Instant.compare(start, target) >= 0 ? invalidEvent('The target must be after the start.')
-    : start.toZonedDateTimeISO(timeZone).year < 1900 || target.toZonedDateTimeISO(timeZone).year > 2200
+  return start >= target ? invalidEvent('The target must be after the start.')
+    : Temporal.Instant.fromEpochNanoseconds(start).toZonedDateTimeISO(timeZone).year < 1900 || Temporal.Instant.fromEpochNanoseconds(target).toZonedDateTimeISO(timeZone).year > 2200
       ? invalidEvent('Choose dates between 1900 and 2200.')
-      : { title: title.trim(), emoji: emoji.trim(), color: color.toLowerCase(), startAt: start.toString(), targetAt: target.toString(), repeatUnit, repeatEvery, timeZone };
+      : { title: title.trim(), emoji: emoji.trim(), color: color.toLowerCase(), startAt: Temporal.Instant.fromEpochNanoseconds(start).toString(), targetAt: Temporal.Instant.fromEpochNanoseconds(target).toString(), repeatUnit, repeatEvery, timeZone };
 }
 export function shift(target: string, zone: string, unit: RepeatUnit, amount: number): number {
   const anchor = Temporal.Instant.from(target).toZonedDateTimeISO(zone);

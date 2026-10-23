@@ -3,12 +3,8 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { auth } from './auth';
 import { events } from './events';
-import { jsonObject,requireAuth,throttle,username } from './security';
+import { jsonObject,memberUsername,requireAuth,throttle } from './security';
 import type { AppEnv,ApiBindings } from './types';
-function memberUsername(data:Readonly<Record<string,unknown>>):string {
- if(Object.keys(data).some(k=>k!=='username'))throw new Error('Only a username is accepted.');
- return username(data.username);
-}
 const app=new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements -- Register the HTTP origin and response-header middleware with the Hono router.
 app.use('*',async(c,next)=>{
@@ -84,6 +80,7 @@ export default {
  fetch:app.fetch,
  async scheduled(_event:ScheduledController,env:ApiBindings){
   // Remove old capabilities without retaining usernames, tokens, or IP addresses in logs.
+  // eslint-disable-next-line functional/no-expression-statements -- Delete expired authentication capabilities and rate limits at the scheduled D1 persistence boundary.
   await env.DB.batch([
    env.DB.prepare('DELETE FROM sessions WHERE expires_at<unixepoch()'),
    env.DB.prepare('DELETE FROM login_challenges WHERE expires_at<unixepoch()-86400 AND id NOT IN (SELECT challenge_id FROM sessions) AND id NOT IN (SELECT challenge_id FROM bootstrap_approvals)'),

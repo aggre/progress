@@ -10,6 +10,9 @@ export function username(value: unknown): string {
  const name=typeof value==='string' ? value.trim().toLowerCase() : invalidInput('Enter a username.');
  return /^[a-z0-9][a-z0-9_-]{2,31}$/.test(name) ? name : invalidInput('Use 3–32 letters, numbers, underscores, or hyphens.');
 }
+export function memberUsername(data:Readonly<Record<string,unknown>>):string {
+ return Object.keys(data).some(k=>k!=='username') ? invalidInput('Only a username is accepted.') : username(data.username);
+}
 export function validId(value: string | undefined): value is string {return typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);}
 export function validToken(value: unknown): value is string{return typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);}
 export async function jsonObject(c: Context<AppEnv>): Promise<Record<string,unknown>> {

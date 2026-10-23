@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, test, type TestContext } from 'node:test';
+import { test, type TestContext } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
@@ -8,11 +8,7 @@ import type { EventInput } from '@little/shared/events';
 import type { LoginChallenge, Identity, ScheduleRecord } from '@little/shared/api';
 
 const origin='http://127.0.0.1:4321';
-let script:string;
-// eslint-disable-next-line functional/no-expression-statements -- Register the API test build setup with the Node test lifecycle.
-before(async()=>{
- const result=await build({entryPoints:['apps/api/src/index.ts'],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022'});script=result.outputFiles[0].text;
-});
+const script=(await build({entryPoints:['apps/api/src/index.ts'],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022'})).outputFiles[0].text;
 async function fixture(t:TestContext){
  const mf=new Miniflare(convertV4MiniflareOptions({name:'api',modules:true,script,compatibilityDate:'2026-10-21',compatibilityFlags:['nodejs_compat'],bindings:{FRONTEND_ORIGIN:origin,APP_BASE_URL:origin+'/'},d1Databases:{DB:randomUUID()}}));t.after(()=>mf.dispose());
  const db=await mf.getD1Database('DB');

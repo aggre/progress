@@ -9,7 +9,10 @@ import type { LoginChallenge, Identity, ScheduleRecord } from '@little/shared/ap
 
 const origin='http://127.0.0.1:4321';
 let script:string;
-before(async()=>{const result=await build({entryPoints:['apps/api/src/index.ts'],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022'});script=result.outputFiles[0].text;});
+// eslint-disable-next-line functional/no-expression-statements -- Register the API test build setup with the Node test lifecycle.
+before(async()=>{
+ const result=await build({entryPoints:['apps/api/src/index.ts'],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022'});script=result.outputFiles[0].text;
+});
 async function fixture(t:TestContext){
  const mf=new Miniflare(convertV4MiniflareOptions({name:'api',modules:true,script,compatibilityDate:'2026-10-21',compatibilityFlags:['nodejs_compat'],bindings:{FRONTEND_ORIGIN:origin,APP_BASE_URL:origin+'/'},d1Databases:{DB:randomUUID()}}));t.after(()=>mf.dispose());
  const db=await mf.getD1Database('DB');
@@ -30,7 +33,7 @@ async function fixture(t:TestContext){
  return {mf,db,request,challenge,bootstrap};
 }
 
-test('empty installation exposes no app data and has no public registration or bootstrap route',async(t)=>{
+await test('empty installation exposes no app data and has no public registration or bootstrap route',async(t)=>{
  const f=await fixture(t);
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
  assert.equal((await f.request('/api/events')).status,401); // Previous browser bundles stay protected.
@@ -43,7 +46,7 @@ test('empty installation exposes no app data and has no public registration or b
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
 });
 
-test('operator bootstrap atomically creates one family/user and activates only the applicant token',async(t)=>{
+await test('operator bootstrap atomically creates one family/user and activates only the applicant token',async(t)=>{
  const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
  for(const token of [c.pollToken,c.approvalToken,c.sessionToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
  await assert.rejects(f.bootstrap(c,'wrong-user'));
@@ -62,7 +65,7 @@ test('operator bootstrap atomically creates one family/user and activates only t
  for(const [field,token] of [['poll_hash',c.pollToken],['approval_hash',c.approvalToken],['session_hash',c.sessionToken]])assert.equal(row?.[field],createHash('sha256').update(token).digest('hex'));
 });
 
-test('unknown and registered usernames have the same challenge response and secrets are not interchangeable',async(t)=>{
+await test('unknown and registered usernames have the same challenge response and secrets are not interchangeable',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
  const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  assert.deepEqual(Object.keys(known).sort(),Object.keys(unknown).sort());
@@ -75,7 +78,7 @@ test('unknown and registered usernames have the same challenge response and secr
  assert.equal((await f.request('/api/me','GET',undefined,known.sessionToken)).status,401);
 });
 
-test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
+await test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
  const added=await add.json() as Readonly<{user:Readonly<Identity['user']>}>;assert.equal(added.user.username,'family_member');assert.equal(added.user.familyId,owner.familyId);
@@ -99,7 +102,7 @@ test('same-family approval works across users, is idempotent, and cannot reactiv
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
 });
 
-test('family members share existing and new schedules while only creators can change them',async(t)=>{
+await test('family members share existing and new schedules while only creators can change them',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member:Readonly<LoginChallenge>=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
@@ -145,7 +148,7 @@ test('family members share existing and new schedules while only creators can ch
  assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json(),{events:[]});
 });
 
-test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
+await test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member=((await added.json()) as {user:Readonly<Identity['user']>}).user;
@@ -161,7 +164,7 @@ test('family schedule reads include existing events beyond the former 500-event 
  assert.equal((await f.request('/api/schedules','POST',result.events[0],first.sessionToken)).status,409);
 });
 
-test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
+await test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
  const f=await fixture(t),expired:Readonly<LoginChallenge>=await f.challenge('expired-user');
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(expired.id).run();
  assert.deepEqual(await (await f.request(`/api/auth/challenges/${expired.id}/poll`,'POST',{pollToken:expired.pollToken})).json(),{status:'expired'});
@@ -181,7 +184,7 @@ test('expired challenges and sessions cannot be approved or authenticated, and c
  assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,401);
 });
 
-test('origin checks, request bounds, malformed input and login rate limits are enforced',async(t)=>{
+await test('origin checks, request bounds, malformed input and login rate limits are enforced',async(t)=>{
  const f=await fixture(t);
  const foreign=await f.request('/api/auth/challenges','POST',{username:'first-user'},undefined,'https://evil.example');assert.equal(foreign.status,403);assert.equal(foreign.headers.get('Access-Control-Allow-Origin'),null);
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'first-user'})).status,201);
@@ -196,7 +199,7 @@ test('origin checks, request bounds, malformed input and login rate limits are e
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
 });
 
-test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
+await test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
  const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
  const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);
  assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});

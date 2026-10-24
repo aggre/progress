@@ -16,6 +16,7 @@ export function memberUsername(data:Readonly<Record<string,unknown>>):string {
 }
 export function validId(value: string | undefined): value is string {return typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);}
 export function validToken(value: unknown): value is string{return typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);}
+// eslint-disable-next-line functional/prefer-immutable-types -- Read the native Hono request body through its context and return the JSON parsing completion Promise.
 export async function jsonObject(c: Context<AppEnv>): Promise<Readonly<Record<string,unknown>>> {
  const value: unknown=c.req.header('Content-Type')?.startsWith('application/json')
   ? await c.req.json() : invalidInput('Expected JSON.');
@@ -29,6 +30,7 @@ export async function throttle(c: Context<AppEnv>,scope: string,limit: number,pe
  const row=await c.env.DB.prepare('INSERT INTO rate_limits (key,count,expires_at) VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count').bind(key,(window+1)*period).first<Readonly<{count:number}>>();
  return !!row&&row.count<=limit;
 }
+// eslint-disable-next-line functional/prefer-immutable-types -- Authenticate the native Hono request context and return the downstream middleware completion Promise.
 export const requireAuth:MiddlewareHandler<AppEnv>=async(c,next)=>{
  const token=c.req.header('Authorization')?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
  if(!token)return c.json({error:'Please log in to continue.'},401);

@@ -29,7 +29,7 @@ export const events = new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements -- Attach authentication middleware to the schedule router.
 events.use('*', requireAuth);
 
-// eslint-disable-next-line functional/no-expression-statements -- Register the schedule listing HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the schedule listing HTTP endpoint, which reads the native Hono context and returns its D1/response completion Promise.
 events.get('/', async c => {
   const user: Readonly<User> = c.get('identity').user;
   // Resolve sharing through the creator's current family, including existing events.

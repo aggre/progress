@@ -5,8 +5,9 @@ import { auth } from './auth';
 import { events } from './events';
 import { jsonObject,memberUsername,requireAuth,throttle } from './security';
 import type { AppEnv,ApiBindings } from './types';
+// eslint-disable-next-line functional/prefer-immutable-types -- Retain the native Hono router instance to register HTTP middleware and routes.
 const app=new Hono<AppEnv>();
-// eslint-disable-next-line functional/no-expression-statements -- Register the HTTP origin and response-header middleware with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the HTTP origin middleware, which updates the native Hono context and returns its dispatch completion Promise.
 app.use('*',async(c,next)=>{
  const origin=c.req.header('Origin');
  // eslint-disable-next-line functional/no-expression-statements -- Write the HTTP response cache policy at the Hono response boundary.

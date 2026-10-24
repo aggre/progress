@@ -36,9 +36,7 @@ export async function api<T = { ok: boolean }>(path: string, method = 'GET', dat
     response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(15000) });
   } catch { return apiFailure('Unable to reach the service. Please try again.', 0); }
   const result = await response.json().catch(() => apiFailure('The service returned an unexpected response. Please try again.', response.status)) as T & { error?: string };
-  if (!response.ok && response.status === 401 && token && token === getSession()) {
-    clearSession();
-    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
-  }
+  void (!response.ok && response.status === 401 && token && token === getSession()
+    && (clearSession(), window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))));
   return response.ok ? result : apiFailure(result.error || 'Unable to complete this request. Please try again.', response.status);
 }

@@ -27,9 +27,11 @@ async function fixture(t:TestContext){
  t.after(()=>mf.dispose());
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native D1 database handle used by this isolated test environment.
  const db=await mf.getD1Database('DB');
+ // eslint-disable-next-line functional/no-loop-statements -- Read and apply migration files in order against this isolated D1 environment.
  for(const file of ['0001_events.sql','0002_family_auth.sql']){
   const source=await readFile(new URL('../migrations/'+file,import.meta.url),'utf8');
   const migration=source.split('\n').reduce(migrationLine,{pending:'',statements:{},count:0});
+  // eslint-disable-next-line functional/no-loop-statements -- Await each D1 schema write before applying dependent migration statements.
   for(const statement of Object.values(migration.statements)){
    // eslint-disable-next-line functional/no-expression-statements -- Apply migration statements sequentially to the isolated D1 test database.
    await db.prepare(statement).run();

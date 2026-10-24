@@ -65,12 +65,8 @@ try{
  // eslint-disable-next-line functional/prefer-immutable-types -- The native subprocess result contains mutable process buffers at this CLI boundary.
  const result=spawnSync(process.execPath,command,{cwd:root,stdio:'inherit'});
  const status=result.error ? fail(result.error.message) : result.status;
- // eslint-disable-next-line functional/no-expression-statements, functional/immutable-data -- Propagate the Wrangler subprocess failure through the CLI process exit status.
- if(status!==0)process.exitCode=status||1;
- else if(!parsedOptions['--list']){
-  // eslint-disable-next-line functional/no-expression-statements -- Report the completed D1 approval to the operator through stdout.
-  console.log('First-user approval completed. The original browser will finish login on its next poll.');
- }
+ // eslint-disable-next-line functional/no-expression-statements, functional/immutable-data -- Report the subprocess failure through the CLI exit status or the completed approval through stdout.
+ void (status!==0 ? process.exitCode=status||1 : !parsedOptions['--list'] && console.log('First-user approval completed. The original browser will finish login on its next poll.'));
 }finally{
  // eslint-disable-next-line functional/no-expression-statements -- Remove the temporary SQL file from the local filesystem.
  await unlink(file);

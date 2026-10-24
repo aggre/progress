@@ -60,9 +60,11 @@ await test('calendar intervals and timezone conversion',()=>{
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters, functional/no-return-void -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('validates dates, colors, names, intervals and timezone',()=>{
   assert.equal(validateEvent(event).title,'Deadline');
+  // eslint-disable-next-line functional/functional-parameters -- The assertion API invokes this parameterless callback to capture the expected validation exception.
   for (const invalid of [{title:''},{color:'red'},{repeatEvery:0},{repeatEvery:1.5},{repeatUnit:'fortnight'},{timeZone:'Not/AZone'},{startAt:event.targetAt},{targetAt:'invalid'}] as const) assert.throws((): Readonly<EventInput>=>validateEvent({...event,...invalid}));
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters, functional/no-return-void -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('all starter events are valid',()=>{
+  // eslint-disable-next-line functional/functional-parameters -- The assertion API invokes this parameterless callback to capture any unexpected validation exception.
   for(const e of starterEvents('Asia/Tokyo') as Readonly<EventInput>[]) assert.doesNotThrow((): Readonly<EventInput>=>validateEvent(e));
 });

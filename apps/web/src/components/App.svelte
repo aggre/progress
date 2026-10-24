@@ -181,18 +181,18 @@
   onMount(() => {
     readApprovalIntent();
     const stored = storageRead<SavedChallenge>(challengeKey);
-    if (validChallenge(stored) && stored.expiresAt > Date.now()) {
-      pending = stored; username = stored.username;
-      void makeQr(stored).then(startPolling).catch(() => { clearPending(); error = 'Unable to restore the sign-in request. Please try again.'; });
-    } else storageRemove(challengeKey);
+    void (validChallenge(stored) && stored.expiresAt > Date.now()
+      ? (pending = stored, username = stored.username,
+        void makeQr(stored).then(startPolling).catch(() => { clearPending(); error = 'Unable to restore the sign-in request. Please try again.'; }))
+      : storageRemove(challengeKey));
     void loadIdentity();
     // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native interval handle so component cleanup can cancel it.
-    const timer = setInterval(() => { now = Date.now(); if (pending && pending.expiresAt <= now) { expired = true; stopPolling(); storageRemove(challengeKey); } }, 1000);
+    const timer = setInterval(() => { now = Date.now(); void (pending && pending.expiresAt <= now && (expired = true, stopPolling(), storageRemove(challengeKey))); }, 1000);
     // eslint-disable-next-line functional/functional-parameters -- Handle the browser session-expiration event by clearing its signed-in view.
     const sessionExpired = () => { identity = null; familyOpen = false; notice = 'Your session has ended. Ask your family to approve a new sign-in.'; };
     // eslint-disable-next-line functional/prefer-immutable-types -- Read the native browser StorageEvent to synchronize sign-in state between tabs.
     const storageChanged = (event: StorageEvent) => {
-      if (event.key === `${STORAGE_NAMESPACE}:session`) { identity = null; checking = true; void loadIdentity(); }
+      void (event.key === `${STORAGE_NAMESPACE}:session` && (identity = null, checking = true, void loadIdentity()));
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, sessionExpired);
     window.addEventListener('storage', storageChanged);

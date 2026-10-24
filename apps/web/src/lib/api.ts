@@ -22,6 +22,7 @@ export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); this.name = 'ApiError'; }
 }
 function apiFailure(message: string, status: number): never { throw new ApiError(message, status); }
+// eslint-disable-next-line functional/prefer-immutable-types -- The browser HTTP client returns the native fetch and response parsing completion Promise.
 export async function api<T = { ok: boolean }>(path: string, method = 'GET', data?: unknown, token: string | null = getSession()): Promise<T> {
   const headers: Readonly<Record<string, string>> = {
     Accept: 'application/json',

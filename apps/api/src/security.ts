@@ -4,6 +4,7 @@ import type { AppEnv } from './types';
 export const CHALLENGE_SECONDS=300;
 export const SESSION_SECONDS=30*86400;
 export function randomToken(bytes=32) { return btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(bytes)))).replaceAll('+','-').replaceAll('/','_').replaceAll('=',''); }
+// eslint-disable-next-line functional/prefer-immutable-types -- Web Crypto completes hashing through its native Promise at this cryptographic API boundary.
 export async function hash(value: string) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(b=>b.toString(16).padStart(2,'0')).join(''); }
 function invalidInput(message: string): never { throw new Error(message); }
 export function username(value: unknown): string {
@@ -21,6 +22,7 @@ export async function jsonObject(c: Context<AppEnv>): Promise<Readonly<Record<st
  return value&&typeof value==='object'&&!Array.isArray(value)
   ? value as Readonly<Record<string,unknown>> : invalidInput('Expected a JSON object.');
 }
+// eslint-disable-next-line functional/prefer-immutable-types -- Read the native Hono request context and return the D1 rate-limit operation completion Promise.
 export async function throttle(c: Context<AppEnv>,scope: string,limit: number,period=60,identifier?:string){
  const now=Math.floor(Date.now()/1000),window=Math.floor(now/period);
  const key=`${scope}:${await hash(identifier||c.req.header('CF-Connecting-IP')||'local')}:${window}`;

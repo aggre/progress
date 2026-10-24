@@ -24,6 +24,7 @@
     "lint:report": "eslint . --format json --output-file work/eslint-report.json"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261024.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.5",
     "@types/ramda": "^0.32.0",

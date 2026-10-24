@@ -38,7 +38,12 @@ async function fixture(t:TestContext){
  }
  // eslint-disable-next-line functional/prefer-immutable-types -- Dispatch an HTTP request through Miniflare and return its native completion Promise.
  const request=(path:string,method='GET',body?:unknown,token?:string,from:string|undefined=origin)=>mf.dispatchFetch('https://api.example'+path,{method,headers:{...(from?{Origin:from}:{}),...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});
- async function challenge(name:string){const response=await request('/api/auth/challenges','POST',{username:name});assert.equal(response.status,201);return await response.json() as LoginChallenge;}
+ async function challenge(name:string){
+  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response to check its status and consume its JSON body.
+  const response=await request('/api/auth/challenges','POST',{username:name});
+  assert.equal(response.status,201);
+  return await response.json() as LoginChallenge;
+ }
  // eslint-disable-next-line functional/prefer-immutable-types -- The operator bootstrap writes to D1 and returns its native completion Promise.
  async function bootstrap(challenge:Readonly<LoginChallenge>,name:string,claimLegacy=0){const familyId=randomUUID(),userId=randomUUID();await db.prepare('INSERT INTO bootstrap_approvals (singleton,challenge_id,expected_username,family_id,user_id,family_name,claim_legacy) VALUES (1,?,?,?,?,?,?)').bind(challenge.id,name,familyId,userId,'Test family',claimLegacy).run();return {familyId,userId};}
  return {mf,db,request,challenge,bootstrap};
@@ -65,6 +70,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
  await assert.rejects(f.bootstrap(c,'wrong-user'));
  assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),await f.db.prepare('SELECT count(*) AS n FROM families').first('n')],[0,0]);
  const created:Readonly<{familyId:string;userId:string}>=await f.bootstrap(c,'first-user');
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);assert.equal(response.status,200);
  const identity=await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>;assert.deepEqual([identity.user.id,identity.family.id],[created.userId,created.familyId]);
  for(const token of [c.pollToken,c.approvalToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
@@ -94,11 +100,13 @@ await test('unknown and registered usernames have the same challenge response an
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
  const added=await add.json() as Readonly<{user:Readonly<Identity['user']>}>;assert.deepEqual([added.user.username,added.user.familyId],['family_member',owner.familyId]);
  assert.equal((await f.request('/api/family/members','POST',{username:'elsewhere',familyId:'forged-family'},first.sessionToken)).status,400);
  const member:Readonly<LoginChallenge>=await f.challenge('family_member');
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const inspected=await f.request(`/api/auth/challenges/${member.id}/inspect`,'POST',{approvalToken:member.approvalToken},first.sessionToken);assert.equal(inspected.status,200);
  const inspection=await inspected.json() as Readonly<{username:string;verificationCode:string}>;assert.deepEqual([inspection.username,inspection.verificationCode],['family_member',member.verificationCode]);
  const approvals:Readonly<Record<string,number>>=await Promise.all([1,2].map(async()=>(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status)).then(zipObj(['first','second']));
@@ -131,6 +139,7 @@ await test('family members share existing and new schedules while only creators 
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${attempt.id}/${action}`,'POST',{approvalToken:attempt.approvalToken},outsider.sessionToken)).status,404);
  assert.equal((await f.request('/api/me','GET',undefined,attempt.sessionToken)).status,401);
  const event:Readonly<EventInput>={title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const created=await f.request('/api/schedules','POST',event,first.sessionToken);assert.equal(created.status,201);
  const saved=await created.json() as Readonly<{event:Readonly<ScheduleRecord>}>;
  assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]);
@@ -146,12 +155,14 @@ await test('family members share existing and new schedules while only creators 
   assert.equal((await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,token)).status,404);
  }
  assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,color:'red'},first.sessionToken)).status,400);
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const updated=await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken);
  assert.deepEqual([updated.status,((await updated.json()) as {event:ScheduleRecord}).event.canEdit],[200,true]);
  const owned=((await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json()) as Readonly<{events:ReadonlyArray<ScheduleRecord>}>).events[0];
  assert.deepEqual([owned.title,owned.canEdit],['Updated',true]);
  const refreshedTitle=((await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json()) as Readonly<{events:ReadonlyArray<ScheduleRecord>}>).events[0].title;assert.equal(refreshedTitle,'Updated');
  // Member-created events are shared in the opposite direction, too.
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const memberCreated=await f.request('/api/schedules','POST',{...event,title:'Member event'},member.sessionToken);assert.equal(memberCreated.status,201);
  const memberEvent=((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event;
  assert.deepEqual([memberEvent.canEdit,memberEvent.createdBy.username],[true,'family-member']);
@@ -166,6 +177,7 @@ await test('family members share existing and new schedules while only creators 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member=((await added.json()) as {user:Readonly<Identity['user']>}).user;
  await f.db.prepare(`WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<501)
@@ -207,10 +219,12 @@ await test('expired challenges and sessions cannot be approved or authenticated,
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('origin checks, request bounds, malformed input and login rate limits are enforced',async(t)=>{
  const f=await fixture(t);
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const foreign=await f.request('/api/auth/challenges','POST',{username:'first-user'},undefined,'https://evil.example');assert.deepEqual([foreign.status,foreign.headers.get('Access-Control-Allow-Origin')],[403,null]);
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'first-user'})).status,201);
  // Explicit raw request omits Origin; helper's default origin intentionally applies to UI requests.
  assert.equal((await f.mf.dispatchFetch('https://api.example/api/auth/challenges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'first-user'})})).status,403);
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const preflight=await f.request('/api/auth/challenges','OPTIONS');assert.deepEqual([preflight.status,preflight.headers.get('Access-Control-Allow-Origin'),preflight.headers.get('Access-Control-Allow-Origin')!=='*'],[204,origin,true]);
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'email@example.com'})).status,400);
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'a'.repeat(9000)})).status,413);

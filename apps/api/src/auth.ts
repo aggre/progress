@@ -5,7 +5,7 @@ import type { AppEnv } from './types';
 interface Challenge { readonly id:string; readonly username:string; readonly poll_hash:string; readonly approval_hash:string; readonly session_hash:string; readonly verification_code:string; readonly status:'pending'|'approved'; readonly expires_at:number; readonly target_id:string; readonly family_id:string; }
 // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native Hono router instance to register authentication HTTP handlers.
 export const auth=new Hono<AppEnv>();
-// eslint-disable-next-line functional/no-expression-statements -- Register the login challenge HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the login challenge HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges',async c=>{
  if(!await throttle(c,'start',8))return c.json({error:'Too many login attempts. Please wait a minute.'},429);
  const name=await jsonObject(c).then(prop('username')).then(username)
@@ -19,7 +19,7 @@ auth.post('/challenges',async c=>{
  return !changes ? c.json({error:'Please try again later.'},429)
   : c.json({id,pollToken,sessionToken,approvalToken,expiresAt:expiresAt*1000,pollInterval:3000,verificationCode},201);
 });
-// eslint-disable-next-line functional/no-expression-statements -- Register the login polling HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the login polling HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges/:id/poll',async c=>{
  if(!await throttle(c,'poll',240))return c.json({error:'Please slow down.'},429);
  const id=c.req.param('id');const input=await jsonObject(c).catch(always(null));
@@ -29,7 +29,7 @@ auth.post('/challenges/:id/poll',async c=>{
   : row.expires_at<=Math.floor(Date.now()/1000) ? c.json({status:'expired'})
   : c.json({status:row.status});
 });
-// eslint-disable-next-line functional/no-expression-statements -- Register the session logout HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the session logout HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/logout',requireAuth,async c=>{
  // eslint-disable-next-line functional/no-expression-statements -- Invalidate the authenticated session in D1 at the logout persistence boundary.
  await c.env.DB.prepare('UPDATE sessions SET expires_at=0 WHERE token_hash=?').bind(c.get('sessionHash')).run();
@@ -41,7 +41,7 @@ async function approval(c: Parameters<typeof jsonObject>[0]) {
  return !validId(id)||!validToken(input.approvalToken) ? null
   : c.env.DB.prepare('SELECT l.*,u.id AS target_id,u.family_id FROM login_challenges l JOIN users u ON u.username=l.username COLLATE NOCASE WHERE l.id=? AND l.approval_hash=? AND u.family_id=? AND l.expires_at>unixepoch()').bind(id,await hash(input.approvalToken),c.get('identity').family.id).first<Challenge>();
 }
-// eslint-disable-next-line functional/no-expression-statements -- Register the approval inspection HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the approval inspection HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges/:id/inspect',requireAuth,async c=>{
  if(!await throttle(c,'inspect',60))return c.json({error:'Please slow down.'},429);
  const row=await approval(c).catch(always(undefined));
@@ -49,7 +49,7 @@ auth.post('/challenges/:id/inspect',requireAuth,async c=>{
   : !row ? c.json({error:'This request is unavailable, expired, or outside your family.'},404)
   : c.json({username:row.username,verificationCode:row.verification_code,expiresAt:row.expires_at*1000});
 });
-// eslint-disable-next-line functional/no-expression-statements -- Register the login approval HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the login approval HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges/:id/approve',requireAuth,async c=>{
  if(!await throttle(c,'approve',30))return c.json({error:'Please slow down.'},429);
  const row=await approval(c).catch(always(undefined));

@@ -94,7 +94,9 @@ await test('operator bootstrap atomically creates one family/user and activates 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('unknown and registered usernames have the same challenge response and secrets are not interchangeable',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
- const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
+ const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');
+ // eslint-disable-next-line functional/no-expression-statements -- Approve the first test user through the isolated D1 bootstrap operation.
+ await f.bootstrap(first,'registered-user');
  const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  assert.deepEqual(Object.keys(known).sort(),Object.keys(unknown).sort());
  assert.deepEqual([known.pollInterval,Math.abs(known.expiresAt-unknown.expiresAt)<=1000],[unknown.pollInterval,true]);
@@ -142,7 +144,9 @@ await test('family members share existing and new schedules while only creators 
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  // eslint-disable-next-line functional/no-expression-statements -- Create the test family member through the API before checking shared schedule access.
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
- const member:Readonly<LoginChallenge>=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
+ const member:Readonly<LoginChallenge>=await f.challenge('family-member');
+ // eslint-disable-next-line functional/no-expression-statements -- Approve the test member through the isolated HTTP API before checking shared schedules.
+ await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
  const outsider:Readonly<LoginChallenge>=await f.challenge('outsider-user'),familyId=randomUUID(),userId=randomUUID();
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.batch([
@@ -258,14 +262,23 @@ await test('origin checks, request bounds, malformed input and login rate limits
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Legacy setup receives the native test environment handles and returns its D1 completion Promise.
  const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{
   // eslint-disable-next-line functional/no-expression-statements -- Insert legacy rows directly into the isolated D1 database to exercise operator ownership claims.
   await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
- const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);
+ const unclaimed=await fixture(t);
+ // eslint-disable-next-line functional/no-expression-statements -- Seed the isolated legacy database before exercising the operator ownership claim.
+ await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');
+ // eslint-disable-next-line functional/no-expression-statements -- Apply the operator approval to this isolated test database.
+ await unclaimed.bootstrap(c,'first-user',0);
  assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});
  assert.deepEqual(await (await unclaimed.request('/api/schedules','GET',undefined,c.sessionToken)).json(),{events:[]});assert.equal(await unclaimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
- const claimed=await fixture(t);await insertLegacy(claimed);const d:Readonly<LoginChallenge>=await claimed.challenge('first-user');await claimed.bootstrap(d,'first-user',1);
+ const claimed=await fixture(t);
+ // eslint-disable-next-line functional/no-expression-statements -- Seed the isolated legacy database before exercising the operator ownership claim.
+ await insertLegacy(claimed);const d:Readonly<LoginChallenge>=await claimed.challenge('first-user');
+ // eslint-disable-next-line functional/no-expression-statements -- Apply the operator approval to this isolated test database.
+ await claimed.bootstrap(d,'first-user',1);
  const legacyTitle=((await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json()) as Readonly<{events:ReadonlyArray<Readonly<{title:string}>>}>).events[0].title;assert.deepEqual([legacyTitle,await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n')],['Preserved legacy event',1]);
 });

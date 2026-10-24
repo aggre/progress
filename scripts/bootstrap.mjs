@@ -5,8 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { mkdir, mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises';
 const root=fileURLToPath(new URL('../',import.meta.url));
-const args=process.argv.slice(2),flags=new Set(['--remote','--local','--claim-legacy','--list']);
-const values=new Set(['--challenge','--username','--family']);
+const args=process.argv.slice(2);
+/** @param {string} name */
+const isFlag=name=>['--remote','--local','--claim-legacy','--list'].includes(name);
+/** @param {string} name */
+const isValueOption=name=>['--challenge','--username','--family'].includes(name);
 /**
  * @param {string} message
  * @returns {never}
@@ -25,9 +28,9 @@ const parsed=args.reduce(
   * @returns {OptionState}
   */
  (state,name,index)=>state.skip ? {options:state.options,skip:false}
-  : flags.has(name)
+  : isFlag(name)
    ? state.options[name] ? fail('Duplicate option: '+name) : {options:{...state.options,[name]:true},skip:false}
-   : values.has(name)
+   : isValueOption(name)
     ? state.options[name]||!args[index+1]||args[index+1].startsWith('--')
      ? fail('Missing or duplicate value: '+name)
      : {options:{...state.options,[name]:args[index+1]},skip:true}

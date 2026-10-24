@@ -46,8 +46,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
  const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
  for(const token of [c.pollToken,c.approvalToken,c.sessionToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
  await assert.rejects(f.bootstrap(c,'wrong-user'));
- assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
- assert.equal(await f.db.prepare('SELECT count(*) AS n FROM families').first('n'),0);
+ assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),await f.db.prepare('SELECT count(*) AS n FROM families').first('n')],[0,0]);
  const created:Readonly<{familyId:string;userId:string}>=await f.bootstrap(c,'first-user');
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);assert.equal(response.status,200);
  const identity=await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>;assert.deepEqual([identity.user.id,identity.family.id],[created.userId,created.familyId]);
@@ -117,7 +116,7 @@ await test('family members share existing and new schedules while only creators 
  assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]);
  const shared=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};
  assert.deepEqual([shared.events.length,shared.events[0].id],[1,saved.event.id]);
- assert.deepEqual(shared.events[0].createdBy,saved.event.createdBy);assert.equal(shared.events[0].canEdit,false);
+ assert.deepEqual([shared.events[0].createdBy,shared.events[0].canEdit],[saved.event.createdBy,false]);
  // The legacy alias has the same sharing and permission rules.
  assert.deepEqual(await (await f.request('/api/events','GET',undefined,member.sessionToken)).json(),shared);
  assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,outsider.sessionToken)).json(),{events:[]});
@@ -128,7 +127,7 @@ await test('family members share existing and new schedules while only creators 
  }
  assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,color:'red'},first.sessionToken)).status,400);
  const updated=await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken);
- assert.equal(updated.status,200);assert.equal(((await updated.json()) as {event:ScheduleRecord}).event.canEdit,true);
+ assert.deepEqual([updated.status,((await updated.json()) as {event:ScheduleRecord}).event.canEdit],[200,true]);
  const owned=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
  assert.deepEqual([owned.events[0].title,owned.events[0].canEdit],['Updated',true]);
  const refreshed=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};assert.equal(refreshed.events[0].title,'Updated');
@@ -154,7 +153,7 @@ await test('family schedule reads include existing events beyond the former 500-
    '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', 'none', 1, 'UTC', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
   FROM numbers`).bind(owner.userId,member.id).run();
  const result=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.equal(result.events.length,501);assert.equal(result.events.filter((e:Readonly<ScheduleRecord>)=>e.canEdit).length,500);
+ assert.deepEqual([result.events.length,result.events.filter((e:Readonly<ScheduleRecord>)=>e.canEdit).length],[501,500]);
  assert.equal(result.events.find((e:Readonly<ScheduleRecord>)=>e.createdBy.id===member.id)?.canEdit,false);
  // Sharing does not increase a creator's write quota.
  assert.equal((await f.request('/api/schedules','POST',result.events[0],first.sessionToken)).status,409);
@@ -168,7 +167,7 @@ await test('expired challenges and sessions cannot be approved or authenticated,
  const a:Readonly<LoginChallenge>=await f.challenge('candidate-alpha'),b:Readonly<LoginChallenge>=await f.challenge('candidate-bravo');
  const results=await Promise.allSettled([f.bootstrap(a,'candidate-alpha'),f.bootstrap(b,'candidate-bravo')]);
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
- assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),1);assert.equal(await f.db.prepare('SELECT count(*) AS n FROM families').first('n'),1);
+ assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),await f.db.prepare('SELECT count(*) AS n FROM families').first('n')],[1,1]);
  const winner=results[0].status==='fulfilled'?a:b;
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n'),1);
  assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,200);
@@ -186,7 +185,7 @@ await test('origin checks, request bounds, malformed input and login rate limits
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'first-user'})).status,201);
  // Explicit raw request omits Origin; helper's default origin intentionally applies to UI requests.
  assert.equal((await f.mf.dispatchFetch('https://api.example/api/auth/challenges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'first-user'})})).status,403);
- const preflight=await f.request('/api/auth/challenges','OPTIONS');assert.equal(preflight.status,204);assert.equal(preflight.headers.get('Access-Control-Allow-Origin'),origin);assert.notEqual(preflight.headers.get('Access-Control-Allow-Origin'),'*');
+ const preflight=await f.request('/api/auth/challenges','OPTIONS');assert.deepEqual([preflight.status,preflight.headers.get('Access-Control-Allow-Origin'),preflight.headers.get('Access-Control-Allow-Origin')!=='*'],[204,origin,true]);
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'email@example.com'})).status,400);
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'a'.repeat(9000)})).status,413);
  assert.equal((await f.request('/api/auth/challenges','POST',[])).status,400);
@@ -201,5 +200,5 @@ await test('legacy events are preserved and require an explicit operator ownersh
  assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});
  assert.deepEqual(await (await unclaimed.request('/api/schedules','GET',undefined,c.sessionToken)).json(),{events:[]});assert.equal(await unclaimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
  const claimed=await fixture(t);await insertLegacy(claimed);const d:Readonly<LoginChallenge>=await claimed.challenge('first-user');await claimed.bootstrap(d,'first-user',1);
- const visible=await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json() as {events:{title:string}[]};assert.equal(visible.events[0].title,'Preserved legacy event');assert.equal(await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
+ const visible=await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json() as {events:{title:string}[]};assert.deepEqual([visible.events[0].title,await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n')],['Preserved legacy event',1]);
 });

@@ -40,14 +40,14 @@ await test('daily wall-clock recurrence follows daylight saving',()=>{
 });
 await test('future recurring events keep their first target',()=>{
   const e: Readonly<EventInput>={...event,targetAt:'2027-01-01T00:00:00Z',repeatUnit:'month'};
-  const c=cycle(e,Date.parse('2026-01-01T00:00Z'));assert.equal(c.progress,0);assert.equal(c.end,Date.parse(e.targetAt));
+  const c=cycle(e,Date.parse('2026-01-01T00:00Z'));assert.deepEqual([c.progress,c.end],[0,Date.parse(e.targetAt)]);
 });
 await test('calendar intervals and timezone conversion',()=>{
   assert.deepEqual([
     new Date(shift('2026-01-31T00:00Z','UTC','month',2)).toISOString(),
     fromLocal('2026-10-22T00:00','Asia/Tokyo'),
-  ],['2026-03-31T00:00:00.000Z','2026-10-21T15:00:00Z']);
-  assert.deepEqual([remainingText(1),remainingText(0)],['1s','0s']);
+    remainingText(1),remainingText(0),
+  ],['2026-03-31T00:00:00.000Z','2026-10-21T15:00:00Z','1s','0s']);
 });
 await test('validates dates, colors, names, intervals and timezone',()=>{
   assert.equal(validateEvent(event).title,'Deadline');

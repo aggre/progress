@@ -50,7 +50,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM families').first('n'),0);
  const created:Readonly<{familyId:string;userId:string}>=await f.bootstrap(c,'first-user');
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);assert.equal(response.status,200);
- const identity=await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>;assert.equal(identity.user.id,created.userId);assert.equal(identity.family.id,created.familyId);
+ const identity=await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>;assert.deepEqual([identity.user.id,identity.family.id],[created.userId,created.familyId]);
  for(const token of [c.pollToken,c.approvalToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
  assert.deepEqual(await (await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).json(),{status:'approved'});
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n'),1);
@@ -65,7 +65,7 @@ await test('unknown and registered usernames have the same challenge response an
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
  const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  assert.deepEqual(Object.keys(known).sort(),Object.keys(unknown).sort());
- assert.equal(known.pollInterval,unknown.pollInterval);assert.ok(Math.abs(known.expiresAt-unknown.expiresAt)<=1000);
+ assert.deepEqual([known.pollInterval,Math.abs(known.expiresAt-unknown.expiresAt)<=1000],[unknown.pollInterval,true]);
  assert.equal(new Set([known.pollToken,known.approvalToken,known.sessionToken]).size,3);
  for(const token of [known.approvalToken,known.sessionToken])assert.equal((await f.request(`/api/auth/challenges/${known.id}/poll`,'POST',{pollToken:token})).status,404);
  assert.equal((await f.request(`/api/auth/challenges/${known.id}/approve`,'POST',{approvalToken:known.pollToken},first.sessionToken)).status,404);
@@ -77,12 +77,12 @@ await test('unknown and registered usernames have the same challenge response an
 await test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
- const added=await add.json() as Readonly<{user:Readonly<Identity['user']>}>;assert.equal(added.user.username,'family_member');assert.equal(added.user.familyId,owner.familyId);
+ const added=await add.json() as Readonly<{user:Readonly<Identity['user']>}>;assert.deepEqual([added.user.username,added.user.familyId],['family_member',owner.familyId]);
  assert.equal((await f.request('/api/family/members','POST',{username:'elsewhere',familyId:'forged-family'},first.sessionToken)).status,400);
  const member:Readonly<LoginChallenge>=await f.challenge('family_member');
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
  const inspected=await f.request(`/api/auth/challenges/${member.id}/inspect`,'POST',{approvalToken:member.approvalToken},first.sessionToken);assert.equal(inspected.status,200);
- const inspection=await inspected.json() as Readonly<{username:string;verificationCode:string}>;assert.equal(inspection.username,'family_member');assert.equal(inspection.verificationCode,member.verificationCode);
+ const inspection=await inspected.json() as Readonly<{username:string;verificationCode:string}>;assert.deepEqual([inspection.username,inspection.verificationCode],['family_member',member.verificationCode]);
  const approvals=await Promise.all([1,2].map(()=>f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)));
  assert.deepEqual(approvals.map(r=>r.status),[200,200]);
  for(let i=0;i<2;i++)assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken:member.pollToken})).json(),{status:'approved'});
@@ -114,9 +114,9 @@ await test('family members share existing and new schedules while only creators 
  const event:Readonly<EventInput>={title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'};
  const created=await f.request('/api/schedules','POST',event,first.sessionToken);assert.equal(created.status,201);
  const saved=await created.json() as Readonly<{event:Readonly<ScheduleRecord>}>;
- assert.equal(saved.event.createdBy.username,'first-user');assert.equal(saved.event.canEdit,true);
+ assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]);
  const shared=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.equal(shared.events.length,1);assert.equal(shared.events[0].id,saved.event.id);
+ assert.deepEqual([shared.events.length,shared.events[0].id],[1,saved.event.id]);
  assert.deepEqual(shared.events[0].createdBy,saved.event.createdBy);assert.equal(shared.events[0].canEdit,false);
  // The legacy alias has the same sharing and permission rules.
  assert.deepEqual(await (await f.request('/api/events','GET',undefined,member.sessionToken)).json(),shared);
@@ -130,14 +130,14 @@ await test('family members share existing and new schedules while only creators 
  const updated=await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken);
  assert.equal(updated.status,200);assert.equal(((await updated.json()) as {event:ScheduleRecord}).event.canEdit,true);
  const owned=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.equal(owned.events[0].title,'Updated');assert.equal(owned.events[0].canEdit,true);
+ assert.deepEqual([owned.events[0].title,owned.events[0].canEdit],['Updated',true]);
  const refreshed=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};assert.equal(refreshed.events[0].title,'Updated');
  // Member-created events are shared in the opposite direction, too.
  const memberCreated=await f.request('/api/schedules','POST',{...event,title:'Member event'},member.sessionToken);assert.equal(memberCreated.status,201);
  const memberEvent=((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event;
- assert.equal(memberEvent.canEdit,true);assert.equal(memberEvent.createdBy.username,'family-member');
+ assert.deepEqual([memberEvent.canEdit,memberEvent.createdBy.username],[true,'family-member']);
  const combined=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.equal(combined.events.length,2);assert.equal(combined.events.find((e:Readonly<ScheduleRecord>)=>e.id===memberEvent.id)?.canEdit,false);
+ assert.deepEqual([combined.events.length,combined.events.find((e:Readonly<ScheduleRecord>)=>e.id===memberEvent.id)?.canEdit],[2,false]);
  assert.equal((await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,first.sessionToken)).status,404);
  assert.equal((await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,first.sessionToken)).status,200);
  assert.equal((await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,member.sessionToken)).status,200);
@@ -182,7 +182,7 @@ await test('expired challenges and sessions cannot be approved or authenticated,
 
 await test('origin checks, request bounds, malformed input and login rate limits are enforced',async(t)=>{
  const f=await fixture(t);
- const foreign=await f.request('/api/auth/challenges','POST',{username:'first-user'},undefined,'https://evil.example');assert.equal(foreign.status,403);assert.equal(foreign.headers.get('Access-Control-Allow-Origin'),null);
+ const foreign=await f.request('/api/auth/challenges','POST',{username:'first-user'},undefined,'https://evil.example');assert.deepEqual([foreign.status,foreign.headers.get('Access-Control-Allow-Origin')],[403,null]);
  assert.equal((await f.request('/api/auth/challenges','POST',{username:'first-user'})).status,201);
  // Explicit raw request omits Origin; helper's default origin intentionally applies to UI requests.
  assert.equal((await f.mf.dispatchFetch('https://api.example/api/auth/challenges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'first-user'})})).status,403);

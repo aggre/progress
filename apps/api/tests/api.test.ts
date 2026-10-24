@@ -9,19 +9,29 @@ import type { LoginChallenge, Identity, ScheduleRecord } from '@little/shared/ap
 
 const origin='http://127.0.0.1:4321';
 const script=(await build({entryPoints:['apps/api/src/index.ts'],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022'})).outputFiles[0].text;
+type MigrationState = Readonly<{pending:string; statements:Readonly<Record<number,string>>; count:number}>;
+function migrationLine(state:MigrationState,line:string):MigrationState {
+ const pending=state.pending+line+'\n';
+ const trigger=/^CREATE TRIGGER\b/i.test(pending.trimStart());
+ const complete=trigger ? /^END;\s*$/.test(line) : /;\s*$/.test(line);
+ return !line.trim()||line.trimStart().startsWith('--') ? state
+  : complete ? {pending:'',statements:{...state.statements,[state.count]:pending},count:state.count+1}
+  : {...state,pending};
+}
 async function fixture(t:TestContext){
- const mf=new Miniflare(convertV4MiniflareOptions({name:'api',modules:true,script,compatibilityDate:'2026-10-21',compatibilityFlags:['nodejs_compat'],bindings:{FRONTEND_ORIGIN:origin,APP_BASE_URL:origin+'/'},d1Databases:{DB:randomUUID()}}));t.after(()=>mf.dispose());
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain the mutable Miniflare runtime handle for this test environment.
+ const mf=new Miniflare(convertV4MiniflareOptions({name:'api',modules:true,script,compatibilityDate:'2026-10-21',compatibilityFlags:['nodejs_compat'],bindings:{FRONTEND_ORIGIN:origin,APP_BASE_URL:origin+'/'},d1Databases:{DB:randomUUID()}}));
+ // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters, functional/prefer-immutable-types -- Register runtime disposal with the test lifecycle; its callback returns the native cleanup Promise.
+ t.after(()=>mf.dispose());
  const db=await mf.getD1Database('DB');
  for(const file of ['0001_events.sql','0002_family_auth.sql']){
   const source=await readFile(new URL('../migrations/'+file,import.meta.url),'utf8');
-  let statement='';
-  for(const line of source.split('\n')){
-   if(!line.trim()||line.trimStart().startsWith('--'))continue;
-   statement+=line+'\n';
-   const trigger=/^CREATE TRIGGER\b/i.test(statement.trimStart());
-   if(trigger ? /^END;\s*$/.test(line) : /;\s*$/.test(line)){await db.prepare(statement).run();statement='';}
+  const migration=source.split('\n').reduce(migrationLine,{pending:'',statements:{},count:0});
+  for(const statement of Object.values(migration.statements)){
+   // eslint-disable-next-line functional/no-expression-statements -- Apply migration statements sequentially to the isolated D1 test database.
+   await db.prepare(statement).run();
   }
-  assert.equal(statement.trim(),'','migration statement was not terminated');
+  assert.equal(migration.pending.trim(),'','migration statement was not terminated');
  }
  const request=(path:string,method='GET',body?:unknown,token?:string,from:string|undefined=origin)=>mf.dispatchFetch('https://api.example'+path,{method,headers:{...(from?{Origin:from}:{}),...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});
  async function challenge(name:string){const response=await request('/api/auth/challenges','POST',{username:name});assert.equal(response.status,201);return await response.json() as LoginChallenge;}

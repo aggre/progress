@@ -34,20 +34,20 @@ app.use('*',async(c,next)=>{
  // eslint-disable-next-line functional/no-expression-statements -- Dispatch the request to downstream Hono middleware after writing response headers.
  await next();
 });
-// eslint-disable-next-line functional/no-expression-statements -- Register the HTTP request body limit middleware with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the request-size middleware whose rejection callback reads the native Hono context and returns an HTTP Response.
 app.use('/api/*',bodyLimit({maxSize:8192,onError:c=>c.json({error:'Request is too large.'},413)}));
-// eslint-disable-next-line functional/no-expression-statements -- Register the health check HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the health endpoint which reads the native Hono context and returns an HTTP Response.
 app.get('/health',c=>c.json({ok:true}));
 // eslint-disable-next-line functional/no-expression-statements -- Mount authentication HTTP endpoints on the Hono router.
 app.route('/api/auth',auth);
-// eslint-disable-next-line functional/no-expression-statements -- Register the current identity HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the identity endpoint which reads the native Hono context and returns an HTTP Response.
 app.get('/api/me',requireAuth,c=>c.json(c.get('identity')));
-// eslint-disable-next-line functional/no-expression-statements -- Register the family listing HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the family listing endpoint using the native Hono context and D1/response completion Promise.
 app.get('/api/family',requireAuth,async c=>{
  const family=c.get('identity').family;
  const r=await c.env.DB.prepare('SELECT id,username,family_id AS familyId FROM users WHERE family_id=? ORDER BY created_at,id LIMIT 50').bind(family.id).all();return c.json({family,members:r.results});
 });
-// eslint-disable-next-line functional/no-expression-statements -- Register the family member creation HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the family member creation endpoint using the native Hono context and D1/response completion Promise.
 app.post('/api/family/members',requireAuth,async c=>{
  const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>=c.get('identity');
  const allowed=await throttle(c,'member-add',10,3600,identity.user.id);

@@ -18,6 +18,7 @@ function migrationLine(state:MigrationState,line:string):MigrationState {
   : complete ? {pending:'',statements:{...state.statements,[state.count]:pending},count:state.count+1}
   : {...state,pending};
 }
+// eslint-disable-next-line functional/prefer-immutable-types -- The native test context owns runtime cleanup, and fixture setup returns its environment completion Promise.
 async function fixture(t:TestContext){
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the mutable Miniflare runtime handle for this test environment.
  const mf=new Miniflare(convertV4MiniflareOptions({name:'api',modules:true,script,compatibilityDate:'2026-10-21',compatibilityFlags:['nodejs_compat'],bindings:{FRONTEND_ORIGIN:origin,APP_BASE_URL:origin+'/'},d1Databases:{DB:randomUUID()}}));

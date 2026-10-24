@@ -69,10 +69,10 @@ app.route('/api/schedules',events);
 // Retain the old route while existing browser bundles refresh.
 // eslint-disable-next-line functional/no-expression-statements -- Mount the legacy schedule HTTP alias on the Hono router.
 app.route('/api/events',events);
-// eslint-disable-next-line functional/no-expression-statements -- Register the unmatched-request HTTP response handler with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the unmatched-request handler using the native Hono context and HTTP Response.
 app.notFound(c=>c.json({error:'Not found.'},404));
-// eslint-disable-next-line functional/no-expression-statements -- Register the HTTP error response handler with the Hono router.
-app.onError((error,c)=>{
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the error response handler using the native Hono context and HTTP Response.
+app.onError((error:Readonly<{name:string}>,c)=>{
  // eslint-disable-next-line functional/no-expression-statements -- Report request failures through the Worker logging boundary without sensitive request data.
  console.error(JSON.stringify({event:'request_failed',type:error.name}));
  return c.json({error:'Something went wrong. Please try again.'},500);
@@ -80,6 +80,7 @@ app.onError((error,c)=>{
 export {app};
 export default {
  fetch:app.fetch,
+ // eslint-disable-next-line functional/prefer-immutable-types -- The Worker scheduler supplies its native controller and D1 environment; cleanup returns a completion Promise.
  async scheduled(_event:ScheduledController,env:ApiBindings){
   // Remove old capabilities without retaining usernames, tokens, or IP addresses in logs.
   // eslint-disable-next-line functional/no-expression-statements -- Delete expired authentication capabilities and rate limits at the scheduled D1 persistence boundary.

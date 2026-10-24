@@ -44,6 +44,7 @@ async function fixture(t:TestContext){
  return {mf,db,request,challenge,bootstrap};
 }
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('empty installation exposes no app data and has no public registration or bootstrap route',async(t)=>{
  const f=await fixture(t);
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
@@ -57,6 +58,7 @@ await test('empty installation exposes no app data and has no public registratio
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('operator bootstrap atomically creates one family/user and activates only the applicant token',async(t)=>{
  const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
  for(const token of [c.pollToken,c.approvalToken,c.sessionToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
@@ -75,6 +77,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
  for(const [field,token] of [['poll_hash',c.pollToken],['approval_hash',c.approvalToken],['session_hash',c.sessionToken]])assert.equal(row?.[field],createHash('sha256').update(token).digest('hex'));
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('unknown and registered usernames have the same challenge response and secrets are not interchangeable',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
  const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
@@ -88,6 +91,7 @@ await test('unknown and registered usernames have the same challenge response an
  assert.equal((await f.request('/api/me','GET',undefined,known.sessionToken)).status,401);
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
@@ -112,6 +116,7 @@ await test('same-family approval works across users, is idempotent, and cannot r
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('family members share existing and new schedules while only creators can change them',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);

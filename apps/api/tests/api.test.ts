@@ -45,11 +45,16 @@ async function fixture(t:TestContext){
   return await response.json() as LoginChallenge;
  }
  // eslint-disable-next-line functional/prefer-immutable-types -- The operator bootstrap writes to D1 and returns its native completion Promise.
- async function bootstrap(challenge:Readonly<LoginChallenge>,name:string,claimLegacy=0){const familyId=randomUUID(),userId=randomUUID();await db.prepare('INSERT INTO bootstrap_approvals (singleton,challenge_id,expected_username,family_id,user_id,family_name,claim_legacy) VALUES (1,?,?,?,?,?,?)').bind(challenge.id,name,familyId,userId,'Test family',claimLegacy).run();return {familyId,userId};}
+ async function bootstrap(challenge:Readonly<LoginChallenge>,name:string,claimLegacy=0){
+  const familyId=randomUUID(),userId=randomUUID();
+  // eslint-disable-next-line functional/no-expression-statements -- Persist the operator approval in the isolated D1 test database so its bootstrap trigger can run.
+  await db.prepare('INSERT INTO bootstrap_approvals (singleton,challenge_id,expected_username,family_id,user_id,family_name,claim_legacy) VALUES (1,?,?,?,?,?,?)').bind(challenge.id,name,familyId,userId,'Test family',claimLegacy).run();
+  return {familyId,userId};
+ }
  return {mf,db,request,challenge,bootstrap};
 }
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('empty installation exposes no app data and has no public registration or bootstrap route',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t);
@@ -64,7 +69,7 @@ await test('empty installation exposes no app data and has no public registratio
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('operator bootstrap atomically creates one family/user and activates only the applicant token',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
@@ -85,7 +90,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
  for(const [field,token] of [['poll_hash',c.pollToken],['approval_hash',c.approvalToken],['session_hash',c.sessionToken]])assert.equal(row?.[field],createHash('sha256').update(token).digest('hex'));
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('unknown and registered usernames have the same challenge response and secrets are not interchangeable',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
@@ -100,7 +105,7 @@ await test('unknown and registered usernames have the same challenge response an
  assert.equal((await f.request('/api/me','GET',undefined,known.sessionToken)).status,401);
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
@@ -128,7 +133,7 @@ await test('same-family approval works across users, is idempotent, and cannot r
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('family members share existing and new schedules while only creators can change them',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
@@ -179,7 +184,7 @@ await test('family members share existing and new schedules while only creators 
  assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json(),{events:[]});
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
@@ -198,7 +203,7 @@ await test('family schedule reads include existing events beyond the former 500-
  assert.equal((await f.request('/api/schedules','POST',result.events[0],first.sessionToken)).status,409);
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),expired:Readonly<LoginChallenge>=await f.challenge('expired-user');
@@ -223,7 +228,7 @@ await test('expired challenges and sessions cannot be approved or authenticated,
  assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,401);
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('origin checks, request bounds, malformed input and login rate limits are enforced',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t);
@@ -242,7 +247,7 @@ await test('origin checks, request bounds, malformed input and login rate limits
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
 });
 
-// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
  const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.

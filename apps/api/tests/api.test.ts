@@ -38,6 +38,7 @@ async function fixture(t:TestContext){
  }
  // eslint-disable-next-line functional/prefer-immutable-types -- Dispatch an HTTP request through Miniflare and return its native completion Promise.
  const request=(path:string,method='GET',body?:unknown,token?:string,from:string|undefined=origin)=>mf.dispatchFetch('https://api.example'+path,{method,headers:{...(from?{Origin:from}:{}),...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});
+ // eslint-disable-next-line functional/prefer-immutable-types -- Challenge setup completes the native HTTP request and JSON-body read through its Promise.
  async function challenge(name:string){
   // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response to check its status and consume its JSON body.
   const response=await request('/api/auth/challenges','POST',{username:name});
@@ -118,6 +119,7 @@ await test('same-family approval works across users, is idempotent, and cannot r
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const inspected=await f.request(`/api/auth/challenges/${member.id}/inspect`,'POST',{approvalToken:member.approvalToken},first.sessionToken);assert.equal(inspected.status,200);
  const inspection=await inspected.json() as Readonly<{username:string;verificationCode:string}>;assert.deepEqual([inspection.username,inspection.verificationCode],['family_member',member.verificationCode]);
+ // eslint-disable-next-line functional/prefer-immutable-types -- Each concurrent approval request returns its native HTTP completion Promise.
  const approvals:Readonly<Record<string,number>>=await Promise.all([1,2].map(async()=>(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status)).then(zipObj(['first','second']));
  assert.deepEqual([approvals.first,approvals.second],[200,200]);
  for(let i=0;i<2;i++)assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken:member.pollToken})).json(),{status:'approved'});
@@ -128,6 +130,7 @@ await test('same-family approval works across users, is idempotent, and cannot r
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
  assert.equal((await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status,409);
  // Even cleanup removing the expired row must not make a replay activate it again.
+ // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('DELETE FROM sessions WHERE expires_at=0').run();
  assert.equal((await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status,409);
  assert.equal((await f.request('/api/me','GET',undefined,member.sessionToken)).status,401);
@@ -137,9 +140,11 @@ await test('same-family approval works across users, is idempotent, and cannot r
 await test('family members share existing and new schedules while only creators can change them',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
+ // eslint-disable-next-line functional/no-expression-statements -- Create the test family member through the API before checking shared schedule access.
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member:Readonly<LoginChallenge>=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
  const outsider:Readonly<LoginChallenge>=await f.challenge('outsider-user'),familyId=randomUUID(),userId=randomUUID();
+ // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.batch([
   f.db.prepare('INSERT INTO families (id,name) VALUES (?,?)').bind(familyId,'Other family'),
   f.db.prepare('INSERT INTO users (id,username,family_id) VALUES (?,?,?)').bind(userId,'outsider-user',familyId),
@@ -191,6 +196,7 @@ await test('family schedule reads include existing events beyond the former 500-
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member=((await added.json()) as {user:Readonly<Identity['user']>}).user;
+ // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare(`WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<501)
   INSERT INTO events (id,owner_id,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at)
   SELECT 'existing-'||n, CASE WHEN n<=500 THEN ? ELSE ? END, 'Existing '||n, '🌿', '#7ba989',
@@ -207,6 +213,7 @@ await test('family schedule reads include existing events beyond the former 500-
 await test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),expired:Readonly<LoginChallenge>=await f.challenge('expired-user');
+ // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(expired.id).run();
  assert.deepEqual(await (await f.request(`/api/auth/challenges/${expired.id}/poll`,'POST',{pollToken:expired.pollToken})).json(),{status:'expired'});
  await assert.rejects(f.bootstrap(expired,'expired-user'));assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
@@ -221,9 +228,11 @@ await test('expired challenges and sessions cannot be approved or authenticated,
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n'),1);
  assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,200);
  const knownExpired:Readonly<LoginChallenge>=await f.challenge(statuses.first==='fulfilled'?'candidate-alpha':'candidate-bravo');
+ // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(knownExpired.id).run();
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${knownExpired.id}/${action}`,'POST',{approvalToken:knownExpired.approvalToken},winner.sessionToken)).status,404);
  assert.equal((await f.request('/api/me','GET',undefined,knownExpired.sessionToken)).status,401);
+ // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('UPDATE sessions SET expires_at=unixepoch()-1').run();
  assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,401);
 });
@@ -249,7 +258,9 @@ await test('origin checks, request bounds, malformed input and login rate limits
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
 await test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
- const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
+ const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{
+  // eslint-disable-next-line functional/no-expression-statements -- Insert legacy rows directly into the isolated D1 database to exercise operator ownership claims.
+  await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);
  assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});

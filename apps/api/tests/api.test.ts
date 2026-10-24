@@ -148,9 +148,9 @@ await test('family members share existing and new schedules while only creators 
  assert.equal((await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,color:'red'},first.sessionToken)).status,400);
  const updated=await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Updated'},first.sessionToken);
  assert.deepEqual([updated.status,((await updated.json()) as {event:ScheduleRecord}).event.canEdit],[200,true]);
- const owned=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.deepEqual([owned.events[0].title,owned.events[0].canEdit],['Updated',true]);
- const refreshed=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};assert.equal(refreshed.events[0].title,'Updated');
+ const owned=((await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json()) as Readonly<{events:ReadonlyArray<ScheduleRecord>}>).events[0];
+ assert.deepEqual([owned.title,owned.canEdit],['Updated',true]);
+ const refreshedTitle=((await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json()) as Readonly<{events:ReadonlyArray<ScheduleRecord>}>).events[0].title;assert.equal(refreshedTitle,'Updated');
  // Member-created events are shared in the opposite direction, too.
  const memberCreated=await f.request('/api/schedules','POST',{...event,title:'Member event'},member.sessionToken);assert.equal(memberCreated.status,201);
  const memberEvent=((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event;
@@ -163,6 +163,7 @@ await test('family members share existing and new schedules while only creators 
  assert.deepEqual(await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json(),{events:[]});
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
@@ -179,6 +180,7 @@ await test('family schedule reads include existing events beyond the former 500-
  assert.equal((await f.request('/api/schedules','POST',result.events[0],first.sessionToken)).status,409);
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
  const f=await fixture(t),expired:Readonly<LoginChallenge>=await f.challenge('expired-user');
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(expired.id).run();
@@ -202,6 +204,7 @@ await test('expired challenges and sessions cannot be approved or authenticated,
  assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,401);
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('origin checks, request bounds, malformed input and login rate limits are enforced',async(t)=>{
  const f=await fixture(t);
  const foreign=await f.request('/api/auth/challenges','POST',{username:'first-user'},undefined,'https://evil.example');assert.deepEqual([foreign.status,foreign.headers.get('Access-Control-Allow-Origin')],[403,null]);
@@ -217,6 +220,7 @@ await test('origin checks, request bounds, malformed input and login rate limits
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
 });
 
+// eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
  const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
  const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);

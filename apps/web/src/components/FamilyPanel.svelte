@@ -34,6 +34,7 @@
   }
   onMount(() => { dialog.showModal(); void load(); });
 </script>
+<!-- eslint-disable-next-line functional/prefer-immutable-types -- Handle the native browser cancel event to prevent dismissal while a member is being saved. -->
 <dialog bind:this={dialog} onclose={onclose} oncancel={event => saving ? event.preventDefault() : undefined} aria-labelledby="family-title">
   <!-- eslint-disable-next-line functional/functional-parameters -- Close the native family dialog when its browser button is clicked. -->
   <div class="panel-top"><div><p class="eyebrow">THE PEOPLE YOU TRUST</p><h2 id="family-title">Your family.</h2></div><button class="close-button" aria-label="Close family" disabled={saving} onclick={() => dialog.close()}>×</button></div>

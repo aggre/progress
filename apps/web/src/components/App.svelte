@@ -44,7 +44,7 @@
     try { sessionStorage.removeItem(key); } catch { /* No stored value to remove. */ }
   }
   // eslint-disable-next-line functional/functional-parameters -- Timer cleanup uses the current browser timer handle.
-  function stopPolling() { pollGeneration += 1; if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined; }
+  function stopPolling() { pollGeneration += 1; void (pollTimer && clearTimeout(pollTimer)); pollTimer = undefined; }
   // eslint-disable-next-line functional/functional-parameters -- Clear the current browser login state, timer, and session storage.
   function clearPending() { stopPolling(); pending = null; qrImage = ''; expired = false; storageRemove(challengeKey); }
   function validSecret(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value); }
@@ -68,7 +68,7 @@
       } else { approvalError = 'This approval link is not valid.'; }
     } else {
       const stored = storageRead<ApprovalIntent>(approvalKey);
-      if (stored && validId(stored.id) && validSecret(stored.approvalToken)) approval = stored;
+      void (stored && validId(stored.id) && validSecret(stored.approvalToken) && (approval = stored));
     }
   }
   // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Load the identity for the current browser session through the API. This browser API operation returns its native completion Promise.
@@ -81,11 +81,12 @@
       if (getSession() !== token) return;
       identity = verified;
       error = '';
-      if (approval) await inspectApproval();
+      void (approval && await inspectApproval());
     } catch (e) {
       identity = null;
-      if (e instanceof ApiError && e.status === 401) notice = 'Your session has ended. Ask your family to approve a new sign-in.';
-      else error = e instanceof Error ? e.message : 'Unable to check your session.';
+      void (e instanceof ApiError && e.status === 401
+        ? notice = 'Your session has ended. Ask your family to approve a new sign-in.'
+        : error = e instanceof Error ? e.message : 'Unable to check your session.');
     } finally { checking = false; }
   }
   // eslint-disable-next-line functional/prefer-immutable-types -- The QR image browser operation returns its native completion Promise.
@@ -114,7 +115,7 @@
         clearPending();
         identity = verified;
         notice = '';
-        if (approval) await inspectApproval();
+        void (approval && await inspectApproval());
         return;
       }
       if (result.status === 'expired') { expired = true; stopPolling(); storageRemove(challengeKey); return; }
@@ -124,7 +125,7 @@
       if (e instanceof ApiError && [400, 404, 410].includes(e.status)) { expired = true; stopPolling(); storageRemove(challengeKey); return; }
       error = e instanceof Error ? e.message : 'Unable to check approval. Retrying…';
     }
-    if (generation === pollGeneration) pollTimer = setTimeout(() => { void poll(generation); }, Math.max(3000, challenge.pollInterval, Math.min(30000, failures * 5000)));
+    void (generation === pollGeneration && (pollTimer = setTimeout(() => { void poll(generation); }, Math.max(3000, challenge.pollInterval, Math.min(30000, failures * 5000)))));
   }
   // eslint-disable-next-line functional/functional-parameters -- Schedule the next browser timer for the current login attempt.
   function startPolling() {

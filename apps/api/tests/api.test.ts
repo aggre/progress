@@ -121,7 +121,7 @@ await test('same-family approval works across users, is idempotent, and cannot r
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const inspected=await f.request(`/api/auth/challenges/${member.id}/inspect`,'POST',{approvalToken:member.approvalToken},first.sessionToken);assert.equal(inspected.status,200);
  const inspection=await inspected.json() as Readonly<{username:string;verificationCode:string}>;assert.deepEqual([inspection.username,inspection.verificationCode],['family_member',member.verificationCode]);
- // eslint-disable-next-line functional/prefer-immutable-types -- Each concurrent approval request returns its native HTTP completion Promise.
+ // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Each independent concurrent approval callback needs no input and returns its native HTTP completion Promise.
  const approvals:Readonly<Record<string,number>>=await Promise.all([1,2].map(async()=>(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status)).then(zipObj(['first','second']));
  assert.deepEqual([approvals.first,approvals.second],[200,200]);
  for(let i=0;i<2;i++)assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken:member.pollToken})).json(),{status:'approved'});

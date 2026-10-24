@@ -51,6 +51,7 @@ async function fixture(t:TestContext){
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('empty installation exposes no app data and has no public registration or bootstrap route',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t);
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0);
  assert.equal((await f.request('/api/events')).status,401); // Previous browser bundles stay protected.
@@ -65,6 +66,7 @@ await test('empty installation exposes no app data and has no public registratio
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('operator bootstrap atomically creates one family/user and activates only the applicant token',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
  for(const token of [c.pollToken,c.approvalToken,c.sessionToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
  await assert.rejects(f.bootstrap(c,'wrong-user'));
@@ -85,6 +87,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('unknown and registered usernames have the same challenge response and secrets are not interchangeable',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('registered-user');await f.bootstrap(first,'registered-user');
  const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  assert.deepEqual(Object.keys(known).sort(),Object.keys(unknown).sort());
@@ -99,6 +102,7 @@ await test('unknown and registered usernames have the same challenge response an
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('same-family approval works across users, is idempotent, and cannot reactivate a logged-out session',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const add=await f.request('/api/family/members','POST',{username:' Family_Member '},first.sessionToken);assert.equal(add.status,201);
@@ -126,6 +130,7 @@ await test('same-family approval works across users, is idempotent, and cannot r
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('family members share existing and new schedules while only creators can change them',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
  const member:Readonly<LoginChallenge>=await f.challenge('family-member');await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken);
@@ -176,6 +181,7 @@ await test('family members share existing and new schedules while only creators 
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('family schedule reads include existing events beyond the former 500-event read limit',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),first:Readonly<LoginChallenge>=await f.challenge('first-user');const owner:Readonly<{familyId:string;userId:string}>=await f.bootstrap(first,'first-user');
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const added=await f.request('/api/family/members','POST',{username:'family-member'},first.sessionToken);
@@ -194,6 +200,7 @@ await test('family schedule reads include existing events beyond the former 500-
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('expired challenges and sessions cannot be approved or authenticated, and concurrent bootstrap has one winner',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),expired:Readonly<LoginChallenge>=await f.challenge('expired-user');
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(expired.id).run();
  assert.deepEqual(await (await f.request(`/api/auth/challenges/${expired.id}/poll`,'POST',{pollToken:expired.pollToken})).json(),{status:'expired'});
@@ -218,6 +225,7 @@ await test('expired challenges and sessions cannot be approved or authenticated,
 
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('origin checks, request bounds, malformed input and login rate limits are enforced',async(t)=>{
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t);
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const foreign=await f.request('/api/auth/challenges','POST',{username:'first-user'},undefined,'https://evil.example');assert.deepEqual([foreign.status,foreign.headers.get('Access-Control-Allow-Origin')],[403,null]);
@@ -237,9 +245,11 @@ await test('origin checks, request bounds, malformed input and login rate limits
 // eslint-disable-next-line functional/prefer-immutable-types -- The test runner supplies its mutable lifecycle context and awaits the native completion Promise for this integration test.
 await test('legacy events are preserved and require an explicit operator ownership claim',async(t)=>{
  const insertLegacy=async(f:Awaited<ReturnType<typeof fixture>>)=>{await f.db.prepare("INSERT INTO legacy_events (id,owner,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(randomUUID(),'legacy@example.test','Preserved legacy event','🌿','#7ba989','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z','none',1,'UTC','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z').run();};
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const unclaimed=await fixture(t);await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');await unclaimed.bootstrap(c,'first-user',0);
  assert.deepEqual(await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),{events:[]});
  assert.deepEqual(await (await unclaimed.request('/api/schedules','GET',undefined,c.sessionToken)).json(),{events:[]});assert.equal(await unclaimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),1);
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const claimed=await fixture(t);await insertLegacy(claimed);const d:Readonly<LoginChallenge>=await claimed.challenge('first-user');await claimed.bootstrap(d,'first-user',1);
  const legacyTitle=((await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json()) as Readonly<{events:ReadonlyArray<Readonly<{title:string}>>}>).events[0].title;assert.deepEqual([legacyTitle,await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n')],['Preserved legacy event',1]);
 });

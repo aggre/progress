@@ -25,6 +25,7 @@ function map(r: Row, viewer: string): Readonly<ScheduleRecord> {
   };
 }
 
+// eslint-disable-next-line functional/prefer-immutable-types -- Retain the native Hono router instance to register schedule HTTP handlers.
 export const events = new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements -- Attach authentication middleware to the schedule router.
 events.use('*', requireAuth);
@@ -40,7 +41,7 @@ events.get('/', async c => {
   return c.json({ events: result.results.map(row => map(row, user.id)) });
 });
 
-// eslint-disable-next-line functional/no-expression-statements -- Register the schedule creation HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register schedule creation using the native Hono request context and D1/response completion Promise.
 events.post('/', async c => {
   const user: Readonly<User> = c.get('identity').user;
   const allowed = await throttle(c, 'event-write', 60, 60, user.id);
@@ -58,7 +59,7 @@ events.post('/', async c => {
     : c.json({ event }, 201);
 });
 
-// eslint-disable-next-line functional/no-expression-statements -- Register the schedule update HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register schedule update using the native Hono request context and D1/response completion Promise.
 events.put('/:id', async c => {
   const owner = c.get('identity').user.id;
   const allowed = await throttle(c, 'event-write', 60, 60, owner);
@@ -74,7 +75,7 @@ events.put('/:id', async c => {
     : c.json({ event: row ? map(row, owner) : null });
 });
 
-// eslint-disable-next-line functional/no-expression-statements -- Register the schedule deletion HTTP endpoint with the Hono router.
+// eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register schedule deletion using the native Hono request context and D1/response completion Promise.
 events.delete('/:id', async c => {
   const owner = c.get('identity').user.id;
   if (!await throttle(c, 'event-write', 60, 60, owner)) return c.json({ error: 'Please slow down.' }, 429);

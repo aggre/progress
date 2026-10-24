@@ -3,6 +3,7 @@ import { always, prop } from 'ramda';
 import { CHALLENGE_SECONDS,hash,jsonObject,randomToken,requireAuth,throttle,username,validId,validToken } from './security';
 import type { AppEnv } from './types';
 interface Challenge { readonly id:string; readonly username:string; readonly poll_hash:string; readonly approval_hash:string; readonly session_hash:string; readonly verification_code:string; readonly status:'pending'|'approved'; readonly expires_at:number; readonly target_id:string; readonly family_id:string; }
+// eslint-disable-next-line functional/prefer-immutable-types -- Retain the native Hono router instance to register authentication HTTP handlers.
 export const auth=new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements -- Register the login challenge HTTP endpoint with the Hono router.
 auth.post('/challenges',async c=>{
@@ -34,6 +35,7 @@ auth.post('/logout',requireAuth,async c=>{
  await c.env.DB.prepare('UPDATE sessions SET expires_at=0 WHERE token_hash=?').bind(c.get('sessionHash')).run();
  return c.json({ok:true});
 });
+// eslint-disable-next-line functional/prefer-immutable-types -- Read the native Hono request context and return the D1 approval lookup completion Promise.
 async function approval(c: Parameters<typeof jsonObject>[0]) {
  const id=c.req.param('id');const input:Readonly<Record<string,unknown>>=await jsonObject(c);
  return !validId(id)||!validToken(input.approvalToken) ? null

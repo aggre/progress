@@ -52,33 +52,33 @@
   function validChallenge(value: SavedChallenge | null): value is SavedChallenge {
     return !!value && validId(value.id) && validSecret(value.pollToken) && validSecret(value.sessionToken) && validSecret(value.approvalToken) && typeof value.username === 'string' && typeof value.expiresAt === 'number' && Number.isFinite(value.expiresAt) && typeof value.pollInterval === 'number' && value.pollInterval > 0 && typeof value.verificationCode === 'string';
   }
+  function applyApprovalIntent(intent: ApprovalIntent) {
+    approval = intent;
+    // eslint-disable-next-line functional/no-try-statements -- Approval can continue in memory when browser session storage rejects a write.
+    try { sessionStorage.setItem(approvalKey, JSON.stringify(intent)); } catch { /* Current tab can still approve. */ }
+  }
   // eslint-disable-next-line functional/functional-parameters -- Read the browser URL and tab storage, then update browser history.
   function readApprovalIntent() {
     const fragment = window.location.hash;
-    if (fragment.startsWith('#approve=')) {
-      // The approval capability never enters an HTTP request or a referrer.
-      history.replaceState(null, '', `${location.pathname}${location.search}`);
-      const raw = fragment.slice('#approve='.length);
-      const separator = raw.indexOf('.');
-      const intent: ApprovalIntent = { id: raw.slice(0, separator), approvalToken: raw.slice(separator + 1) };
-      if (separator > 0 && validId(intent.id) && validSecret(intent.approvalToken)) {
-        approval = intent;
-        // eslint-disable-next-line functional/no-try-statements -- Approval can continue in memory when browser session storage rejects a write.
-        try { sessionStorage.setItem(approvalKey, JSON.stringify(intent)); } catch { /* Current tab can still approve. */ }
-      } else { approvalError = 'This approval link is not valid.'; }
-    } else {
-      const stored = storageRead<ApprovalIntent>(approvalKey);
-      void (stored && validId(stored.id) && validSecret(stored.approvalToken) && (approval = stored));
-    }
+    const fromLink = fragment.startsWith('#approve=');
+    // The approval capability never enters an HTTP request or a referrer.
+    void (fromLink && history.replaceState(null, '', `${location.pathname}${location.search}`));
+    const raw = fromLink ? fragment.slice('#approve='.length) : '';
+    const separator = raw.indexOf('.');
+    const intent: ApprovalIntent = { id: raw.slice(0, separator), approvalToken: raw.slice(separator + 1) };
+    const stored = fromLink ? null : storageRead<ApprovalIntent>(approvalKey);
+    void (fromLink
+      ? separator > 0 && validId(intent.id) && validSecret(intent.approvalToken)
+        ? applyApprovalIntent(intent) : approvalError = 'This approval link is not valid.'
+      : stored && validId(stored.id) && validSecret(stored.approvalToken) && (approval = stored));
   }
   // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Load the identity for the current browser session through the API. This browser API operation returns its native completion Promise.
   async function loadIdentity() {
     const token = getSession();
-    if (!token) { identity = null; checking = false; return; }
     // eslint-disable-next-line functional/no-try-statements -- Handle identity API failures and always clear the browser session-check state.
     try {
-      const verified = await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, token);
-      void (getSession() === token && (
+      const verified = token ? await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, token) : null;
+      void (!token ? identity = null : getSession() === token && (
         identity = verified,
         error = '',
         approval && await inspectApproval()
@@ -112,6 +112,7 @@
       if (generation !== pollGeneration) return;
       failures = 0;
       error = '';
+      // eslint-disable-next-line functional/no-conditional-statements -- Consume the server approval event, verify its session, and persist sign-in state at the browser HTTP/storage boundary.
       if (result.status === 'approved') {
         const verified = await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, challenge.sessionToken);
         // eslint-disable-next-line functional/no-conditional-statements -- Cancel obsolete browser polling continuations before they update UI state, storage, or timers.
@@ -129,6 +130,7 @@
       // eslint-disable-next-line functional/no-conditional-statements -- Cancel obsolete browser polling continuations before they update UI state, storage, or timers.
       if (generation !== pollGeneration) return;
       failures += 1;
+      // eslint-disable-next-line functional/no-conditional-statements -- Stop browser polling and remove tab storage after a terminal HTTP failure.
       if (e instanceof ApiError && [400, 404, 410].includes(e.status)) { expired = true; stopPolling(); storageRemove(challengeKey); return; }
       error = e instanceof Error ? e.message : 'Unable to check approval. Retrying…';
     }
@@ -142,7 +144,9 @@
   }
   // eslint-disable-next-line functional/prefer-immutable-types -- The browser form handler consumes its native SubmitEvent and returns the API completion Promise.
   async function startLogin(event: SubmitEvent) {
-    event.preventDefault(); if (busy) return;
+    event.preventDefault();
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate native login form submissions while the current request is in flight.
+    if (busy) return;
     busy = true; error = ''; notice = ''; clearPending();
     // eslint-disable-next-line functional/no-try-statements -- Handle challenge API and QR generation failures and always clear the browser busy state.
     try {
@@ -158,6 +162,7 @@
   }
   // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Inspect the current QR approval request through the API. This browser API operation returns its native completion Promise.
   async function inspectApproval() {
+    // eslint-disable-next-line functional/no-conditional-statements -- Wait for the current browser approval intent and session before dispatching its inspection request.
     if (!approval || !identity) return;
     approvalLoading = true; approvalError = ''; approvalDetails = null;
     // eslint-disable-next-line functional/no-try-statements -- Handle approval inspection API failures and always clear the browser loading state.
@@ -167,6 +172,7 @@
   }
   // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Submit the current approval to the API and clear its tab storage. This browser API operation returns its native completion Promise.
   async function approve() {
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore browser approval submissions while their UI state is incomplete or another request is in flight.
     if (!approval || !approvalDetails || busy) return;
     busy = true; approvalError = '';
     // eslint-disable-next-line functional/no-try-statements -- Handle approval API failures and always clear the browser busy state.

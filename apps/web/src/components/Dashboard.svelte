@@ -112,7 +112,9 @@
   }
   // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Delete the currently selected schedule through the API and close its browser dialog. This browser API operation returns its native completion Promise.
   async function remove() {
-    if (!deleteEvent || saving) return; saving=true; formError='';
+    // eslint-disable-next-line functional/no-conditional-statements -- Dispatch deletion only for the current browser dialog selection while no save request is in flight.
+    if (!deleteEvent || saving) return;
+    saving=true; formError='';
     // eslint-disable-next-line functional/no-try-statements -- Handle deletion API failures and restore the browser saving state.
     try { await api('/api/schedules/'+deleteEvent.id,'DELETE');events=events.filter((e:Readonly<ScheduleRecord>)=>e.id!==deleteEvent?.id);deleteDialog.close();notify('Event deleted.'); }
     catch(e) {formError=e instanceof Error ? e.message : 'Unable to delete.';}finally{saving=false;}

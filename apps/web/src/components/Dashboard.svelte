@@ -81,6 +81,7 @@
     targetLocal=toLocal(event?.targetAt || new Date(Date.now()+86400000*7).toISOString(),zone);
     dialog.showModal(); await tick(); nameInput?.focus();
   }
+  // eslint-disable-next-line functional/functional-parameters -- Svelte calls this parameterless two-way binding getter to read the current reactive repeat selection.
   function getRepeatChoice(): RepeatUnit | 'two-weeks' {
     return repeatUnit === 'week' && repeatEvery === 2 ? 'two-weeks' : repeatUnit;
   }
@@ -115,7 +116,11 @@
   async function seed() {
     seeding=true;error='';
     // eslint-disable-next-line functional/no-try-statements -- Handle starter event API failures and restore the browser seeding state.
-    try { for (const input of starterEvents('Asia/Tokyo')) { const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules','POST',input);events=[...events,result.event]; } notify('Your everyday countdowns are ready.'); }
+    try {
+      // eslint-disable-next-line functional/no-loop-statements -- Await each schedule creation and update the browser state before issuing the next HTTP request.
+      for (const input of starterEvents('Asia/Tokyo')) { const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules','POST',input);events=[...events,result.event]; }
+      notify('Your everyday countdowns are ready.');
+    }
     catch(e){error=e instanceof Error ? e.message : 'Unable to add starter events.';}finally{seeding=false;}
   }
   // eslint-disable-next-line functional/functional-parameters -- Download the current browser schedules using a temporary DOM link.

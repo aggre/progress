@@ -244,8 +244,9 @@ await test('expired challenges and sessions cannot be approved or authenticated,
  const knownExpired:Readonly<LoginChallenge>=(assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n'),(await f.request('/api/me','GET',undefined,winner.sessionToken)).status],[1,200]), await f.challenge(statuses.first==='fulfilled'?'candidate-alpha':'candidate-bravo'));
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(knownExpired.id).run();
- // eslint-disable-next-line functional/no-loop-statements -- Await each expiry-protected HTTP operation before sending the next isolated API request.
+ // eslint-disable-next-line functional/no-loop-statements, functional/no-expression-statements -- Await each expiry-protected HTTP operation before sending the next isolated API request.
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${knownExpired.id}/${action}`,'POST',{approvalToken:knownExpired.approvalToken},winner.sessionToken)).status,404);
+ // eslint-disable-next-line functional/no-expression-statements -- Complete this HTTP request and response assertion before the next isolated API operation.
  assert.equal((await f.request('/api/me','GET',undefined,knownExpired.sessionToken)).status,401);
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('UPDATE sessions SET expires_at=unixepoch()-1').run();
@@ -264,6 +265,7 @@ await test('origin checks, request bounds, malformed input and login rate limits
   foreign.headers.get('Access-Control-Allow-Origin'),
   (await f.request('/api/auth/challenges','POST',{username:'first-user'})).status,
   (await f.mf.dispatchFetch('https://api.example/api/auth/challenges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'first-user'})})).status,
+ // eslint-disable-next-line functional/no-expression-statements -- Complete this HTTP request and response assertion before the next isolated API operation.
  ],[403,null,201,403]), await f.request('/api/auth/challenges','OPTIONS'));assert.deepEqual([
   preflight.status,
   preflight.headers.get('Access-Control-Allow-Origin'),
@@ -272,7 +274,7 @@ await test('origin checks, request bounds, malformed input and login rate limits
   (await f.request('/api/auth/challenges','POST',{username:'a'.repeat(9000)})).status,
   (await f.request('/api/auth/challenges','POST',[])).status,
  ],[204,origin,true,400,413,400]);
- // eslint-disable-next-line functional/no-loop-statements -- Await each rate-limit request before issuing the next request against the isolated API.
+ // eslint-disable-next-line functional/no-loop-statements, functional/no-expression-statements -- Await each rate-limit request before issuing the next request against the isolated API.
  for(const i of [0,1,2,3,4])await f.request('/api/auth/challenges','POST',{username:'rate-test-'+i});
  return assert.deepEqual([
   (await f.request('/api/auth/challenges','POST',{username:'rate-over-limit'})).status,

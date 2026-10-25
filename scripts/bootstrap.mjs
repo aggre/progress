@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { mkdir, mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises';
 const root=fileURLToPath(new URL('../',import.meta.url));
-const args=process.argv.slice(2);
+/** @type {Readonly<Record<number, string>>} */
+const args=Object.fromEntries(process.argv.slice(2).entries());
 /** @param {string} name */
 const isFlag=name=>['--remote','--local','--claim-legacy','--list'].includes(name);
 /** @param {string} name */
@@ -22,7 +23,7 @@ function fail(message){
 }
 /** @typedef {Readonly<{options: Readonly<Record<string, string | boolean | undefined>>, skip: boolean}>} OptionState */
 const initialOptions=/** @type {OptionState} */ ({options:{},skip:false});
-const parsed=args.reduce(
+const parsed=Object.values(args).reduce(
  /**
   * @param {OptionState} state
   * @returns {OptionState}
@@ -61,9 +62,8 @@ const temp=await mkdtemp(resolve(root,'work/bootstrap-')),file=resolve(temp,'ope
 await writeFile(file,sql,{mode:0o600});
 // eslint-disable-next-line functional/no-try-statements -- Always remove the temporary SQL and directory after invoking Wrangler, including failures.
 try{
- const command=[resolve(root,'node_modules/wrangler/bin/wrangler.js'),'d1','execute','DB','--config',resolve(root,'apps/api/wrangler.jsonc'),mode,'--file',file,...(parsedOptions['--local']?['--env','development']:[])];
  // eslint-disable-next-line functional/prefer-immutable-types -- The native subprocess result contains mutable process buffers at this CLI boundary.
- const result=spawnSync(process.execPath,command,{cwd:root,stdio:'inherit'});
+ const result=spawnSync(process.execPath,[resolve(root,'node_modules/wrangler/bin/wrangler.js'),'d1','execute','DB','--config',resolve(root,'apps/api/wrangler.jsonc'),mode,'--file',file,...(parsedOptions['--local']?['--env','development']:[])],{cwd:root,stdio:'inherit'});
  const status=result.error ? fail(result.error.message) : result.status;
  // eslint-disable-next-line functional/no-expression-statements, functional/immutable-data -- Report the subprocess failure through the CLI exit status or the completed approval through stdout.
  void (status!==0 ? process.exitCode=status||1 : !parsedOptions['--list'] && console.log('First-user approval completed. The original browser will finish login on its next poll.'));

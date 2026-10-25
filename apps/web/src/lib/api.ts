@@ -18,6 +18,7 @@ export function clearSession() {
 }
 export function sessionStorageKey(value: string) { return `${STORAGE_NAMESPACE}:${value}`; }
 
+// eslint-disable-next-line functional/no-classes, functional/no-class-inheritance -- Preserve native Error interoperability (instanceof and stack) for failures crossing the browser fetch boundary.
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
   override readonly name = 'ApiError';

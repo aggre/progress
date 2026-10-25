@@ -7,9 +7,11 @@ interface Challenge { readonly id:string; readonly username:string; readonly pol
 export const auth=new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the login challenge HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges',async c=>{
+ // eslint-disable-next-line functional/no-conditional-statements -- Respond to the D1 throttle decision before consuming another HTTP request body.
  if(!await throttle(c,'start',8))return c.json({error:'Too many login attempts. Please wait a minute.'},429);
  const name=await jsonObject(c).then(prop('username')).then(username)
   .catch((e:unknown):Readonly<{error:string}>=>({error:e instanceof Error?e.message:'Invalid username.'}));
+ // eslint-disable-next-line functional/no-conditional-statements -- Translate the username validation outcome and D1 throttle decision into an HTTP response before persistence.
  if(typeof name!=='string'||!await throttle(c,'username-start',8,60,name))return typeof name!=='string'
   ? c.json(name,400) : c.json({error:'Too many login attempts. Please wait a minute.'},429);
  const id=crypto.randomUUID(),pollToken=randomToken(),approvalToken=randomToken(),sessionToken=randomToken(),verificationCode=randomToken(5).slice(0,6).toUpperCase();

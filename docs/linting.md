@@ -14,9 +14,14 @@ npm run lint:fix
 ```
 
 `lint:report` writes machine-readable results to `work/eslint-report.json`.
-All three commands return a failing exit code when lint errors remain. Existing
-violations are intentional migration work: do not suppress them, change errors
-to warnings, or add `|| true`. Review automatic fixes before committing them.
+All three commands return a failing exit code when lint errors remain. Fix
+violations without weakening normal rules, changing errors to warnings, excluding
+sources, or adding `|| true`. Review automatic fixes before committing them.
+
+At actual runtime boundaries such as HTTP, D1, browser storage, timers, DOM, and
+lifecycle callbacks, narrowly scoped rule exceptions are allowed only when needed
+for that interaction. State the reason beside each directive or override. Pure
+validation, calculations, and data transformations retain the full ruleset.
 
 Lint is deliberately separate from `check`, `test`, builds, and GitHub Actions.
 No lint CI step, commit hook, or scheduled cleanup job is installed. A separate
@@ -59,3 +64,9 @@ pure operations and composition; the progress calculation already uses `clamp`.
 Declare a direct Ramda dependency in another workspace if that workspace starts
 importing it directly. Ramda's TypeScript declarations are installed in the root
 development dependencies.
+
+Validation returns readonly error values rather than throwing from business logic.
+`validateEvent` returns an event or `{ error: string }`; username validation returns
+a name or the same error shape. HTTP handlers translate these outcomes into status
+codes. Malformed HTTP JSON still rejects at the request decoding boundary. Starter
+events are an ordered readonly record; use `Object.values` when iterating them.

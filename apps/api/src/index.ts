@@ -55,6 +55,7 @@ app.post('/api/family/members',requireAuth,async c=>{
  const name=allowed ? await jsonObject(c).then(memberUsername)
   .catch((e:unknown):Readonly<{error:string}>=>({error:e instanceof Error?e.message:'Invalid username.'}))
   : {error:'Please try again later.'} as const;
+ // eslint-disable-next-line functional/no-conditional-statements -- Return the request validation or D1 throttling response before issuing a family-member write.
  if(!allowed||typeof name!=='string')return c.json(name,allowed?400:429);
  const id=crypto.randomUUID();
  // eslint-disable-next-line functional/no-try-statements -- Translate D1 username conflicts at the family member persistence boundary.

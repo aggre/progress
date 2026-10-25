@@ -58,11 +58,10 @@ await test('calendar intervals and timezone conversion',()=>{
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('validates dates, colors, names, intervals and timezone',()=>{
-  // eslint-disable-next-line functional/functional-parameters -- The assertion API invokes this parameterless callback to capture the expected validation exception.
-  return void (assert.equal(validateEvent(event).title,'Deadline'), ([{title:''},{color:'red'},{repeatEvery:0},{repeatEvery:1.5},{repeatUnit:'fortnight'},{timeZone:'Not/AZone'},{startAt:event.targetAt},{targetAt:'invalid'}] as const).every(invalid => (assert.throws((): Readonly<EventInput>=>validateEvent({...event,...invalid})), true)));
+  const validated=validateEvent(event);
+  return void (assert.equal('title' in validated ? validated.title : undefined,'Deadline'), ([{title:''},{color:'red'},{repeatEvery:0},{repeatEvery:1.5},{repeatUnit:'fortnight'},{timeZone:'Not/AZone'},{startAt:event.targetAt},{targetAt:'invalid'}] as const).every(invalid => (assert.equal('error' in validateEvent({...event,...invalid}),true), true)));
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('all starter events are valid',()=>{
-  // eslint-disable-next-line functional/functional-parameters -- The assertion API invokes this parameterless callback to capture any unexpected validation exception.
-  return void (starterEvents('Asia/Tokyo') as Readonly<EventInput>[]).every(e => (assert.doesNotThrow((): Readonly<EventInput>=>validateEvent(e)), true));
+  return void Object.values(starterEvents('Asia/Tokyo')).every(e => (assert.equal('error' in validateEvent(e),false), true));
 });

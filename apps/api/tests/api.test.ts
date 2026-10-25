@@ -36,6 +36,7 @@ async function fixture(t:TestContext){
    // eslint-disable-next-line functional/no-expression-statements -- Apply migration statements sequentially to the isolated D1 test database.
    await db.prepare(statement).run();
   }
+  // eslint-disable-next-line functional/no-expression-statements -- Verify migration file termination after applying its schema writes to the isolated D1 test environment.
   assert.equal(migration.pending.trim(),'','migration statement was not terminated');
  }
  // eslint-disable-next-line functional/prefer-immutable-types -- Dispatch an HTTP request through Miniflare and return its native completion Promise.

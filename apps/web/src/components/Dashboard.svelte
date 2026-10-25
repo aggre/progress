@@ -125,7 +125,7 @@
     // eslint-disable-next-line functional/no-try-statements -- Handle starter event API failures and restore the browser seeding state.
     try {
       // eslint-disable-next-line functional/no-loop-statements -- Await each schedule creation and update the browser state before issuing the next HTTP request.
-      for (const input of starterEvents('Asia/Tokyo')) { const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules','POST',input);events=[...events,result.event]; }
+      for (const input of Object.values(starterEvents('Asia/Tokyo'))) { const result=await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules','POST',input);events=[...events,result.event]; }
       notify('Your everyday countdowns are ready.');
     }
     catch(e){error=e instanceof Error ? e.message : 'Unable to add starter events.';}finally{seeding=false;}

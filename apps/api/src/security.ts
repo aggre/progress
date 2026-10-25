@@ -5,22 +5,24 @@ export const SESSION_SECONDS=30*86400;
 export function randomToken(bytes=32) { return btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(bytes)))).replaceAll('+','-').replaceAll('/','_').replaceAll('=',''); }
 // eslint-disable-next-line functional/prefer-immutable-types -- Web Crypto completes hashing through its native Promise at this cryptographic API boundary.
 export async function hash(value: string) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(b=>b.toString(16).padStart(2,'0')).join(''); }
-function invalidInput(message: string): never { throw new Error(message); }
-export function username(value: unknown): string {
- const name=typeof value==='string' ? value.trim().toLowerCase() : invalidInput('Enter a username.');
- return /^[a-z0-9][a-z0-9_-]{2,31}$/.test(name) ? name : invalidInput('Use 3–32 letters, numbers, underscores, or hyphens.');
+// eslint-disable-next-line functional/no-throw-statements -- Reject malformed HTTP JSON at the request decoding boundary; username validation returns readonly error values.
+function invalidJsonInput(message: string): never { throw new Error(message); }
+export function username(value: unknown): string | Readonly<{error: string}> {
+ const name=typeof value==='string' ? value.trim().toLowerCase() : null;
+ return name===null ? {error:'Enter a username.'}
+  : /^[a-z0-9][a-z0-9_-]{2,31}$/.test(name) ? name : {error:'Use 3–32 letters, numbers, underscores, or hyphens.'};
 }
-export function memberUsername(data:Readonly<Record<string,unknown>>):string {
- return Object.keys(data).some(k=>k!=='username') ? invalidInput('Only a username is accepted.') : username(data.username);
+export function memberUsername(data:Readonly<Record<string,unknown>>):string | Readonly<{error: string}> {
+ return Object.keys(data).some(k=>k!=='username') ? {error:'Only a username is accepted.'} : username(data.username);
 }
 export function validId(value: string | undefined): value is string {return typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);}
 export function validToken(value: unknown): value is string{return typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);}
 // eslint-disable-next-line functional/prefer-immutable-types -- Read the native Hono request body through its context and return the JSON parsing completion Promise.
 export async function jsonObject(c: Context<AppEnv>): Promise<Readonly<Record<string,unknown>>> {
  const value: unknown=c.req.header('Content-Type')?.startsWith('application/json')
-  ? await c.req.json() : invalidInput('Expected JSON.');
+  ? await c.req.json() : invalidJsonInput('Expected JSON.');
  return value&&typeof value==='object'&&!Array.isArray(value)
-  ? value as Readonly<Record<string,unknown>> : invalidInput('Expected a JSON object.');
+  ? value as Readonly<Record<string,unknown>> : invalidJsonInput('Expected a JSON object.');
 }
 // eslint-disable-next-line functional/prefer-immutable-types -- Read the native Hono request context and return the D1 rate-limit operation completion Promise.
 export async function throttle(c: Context<AppEnv>,scope: string,limit: number,period=60,identifier?:string){

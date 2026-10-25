@@ -58,9 +58,9 @@ npm run build
 
 `npm run build:web` produces only `apps/web/dist`, the GitHub Pages artifact. `npm run build:api` validates and bundles the separate Worker without deploying it. Neither build deploys resources or upgrades a plan.
 
-Run `npm run lint` separately for the strict functional programming rules. Existing
-lint errors are tracked for later cleanup; lint is not part of CI or the commands
-above. `npm run lint:report` writes a JSON report to `work/eslint-report.json`.
+Run `npm run lint` separately for the strict functional programming rules. Lint
+is not part of CI or the commands above. `npm run lint:report` writes a JSON
+report to `work/eslint-report.json`.
 See [functional programming and linting](docs/linting.md) for the shared root
 configuration, Web overrides, and Ramda usage.
 

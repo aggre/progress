@@ -8,6 +8,7 @@
   type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
 
+  // eslint-disable-next-line functional/prefer-immutable-types -- Svelte owns this reactive collection proxy; API loads and edits replace its current browser state.
   let events = $state<ScheduleRecord[]>([]);
   let now = $state(Date.now());
   let loading = $state(true);
@@ -37,8 +38,8 @@
   // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native timer handle so the browser toast can be cancelled.
   let toastTimer: ReturnType<typeof setTimeout>;
   let seeding = $state(false);
-  const emojis = ['✨','🎯','🌿','☀️','🌙','🎉','🎂','✈️','📚','💻','🏃','☕','❤️','☘️','⏱️','🏖️'];
-  const timeZones = [...new Set(['Asia/Tokyo', Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC', ...Intl.supportedValuesOf('timeZone')])];
+  const emojis: Readonly<Record<number, string>> = Object.fromEntries(['✨','🎯','🌿','☀️','🌙','🎉','🎂','✈️','📚','💻','🏃','☕','❤️','☘️','⏱️','🏖️'].entries());
+  const timeZones: Readonly<Record<number, string>> = Object.fromEntries([...new Set(['Asia/Tokyo', Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC', ...Intl.supportedValuesOf('timeZone')])].entries());
   const rows = $derived(events.map((e:Readonly<ScheduleRecord>): EventRow=>({...e, timing:cycle(e,now)})));
   const completed = $derived(rows.filter(e=>e.timing.complete).length);
   const active = $derived(rows.filter(e=>!e.timing.complete));
@@ -58,7 +59,7 @@
   async function load() {
     error='';
     // eslint-disable-next-line functional/no-try-statements -- Handle schedule API failures and always clear the browser loading state.
-    try { const result = await api<{ events: ScheduleRecord[] }>('/api/schedules'); events=result.events; } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
+    try { events=(await api<{ events: ScheduleRecord[] }>('/api/schedules')).events; } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
     finally { loading=false; }
   }
   onMount(()=>{
@@ -181,11 +182,11 @@
     <div class="dialog-heading"><div><p class="eyebrow">MAKE TIME FOR IT</p><h2>{editing ? 'Edit your moment.' : 'A new little countdown.'}</h2></div><button type="button" class="close-button" aria-label="Close editor" disabled={saving} onclick={()=>dialog.close()}>×</button></div>
     <div class="form-grid name-row"><label>Emoji<input class="emoji-input" bind:value={emoji} required maxlength="32" aria-label="Event emoji"/></label><label>Event name<input bind:this={nameInput} bind:value={title} placeholder="Something to look forward to" required maxlength="100"/></label></div>
   <!-- eslint-disable-next-line functional/functional-parameters -- Update the browser event editor emoji from its picker button. -->
-    <div class="emoji-picker" aria-label="Choose an emoji">{#each emojis as item (item)}<button type="button" class:selected={emoji===item} aria-label={`Use ${item}`} aria-pressed={emoji===item} onclick={()=>emoji=item}>{item}</button>{/each}</div>
+    <div class="emoji-picker" aria-label="Choose an emoji">{#each Object.values(emojis) as item (item)}<button type="button" class:selected={emoji===item} aria-label={`Use ${item}`} aria-pressed={emoji===item} onclick={()=>emoji=item}>{item}</button>{/each}</div>
     <label class="field-label">Target date & time<input type="datetime-local" bind:value={targetLocal} required min="1900-01-01T00:00" max="2200-12-31T23:59"/></label>
     <div class="form-grid repeat-row"><label>Repeats<select aria-label="Repeats" bind:value={getRepeatChoice, setRepeatChoice}>{#each units as unit (unit)}<option value={unit}>{unit==='none' ? 'Does not repeat' : `Every ${unit}`}</option>{#if unit==='week'}<option value="two-weeks">Every 2 weeks</option>{/if}{/each}</select></label>{#if repeatUnit!=='none'}<label>Every<input type="number" bind:value={repeatEvery} min="1" max="1000" required aria-label="Repeat interval"/></label>{/if}</div>
     {#if repeatUnit!=='none'}<p class="field-hint">The bar fills from the previous occurrence to the next, then starts again. Month-end dates stay anchored.</p>{/if}
-    <label class="field-label">Time zone<select aria-label="Time zone" bind:value={zone}>{#each timeZones as tz (tz)}<option value={tz}>{tz.replaceAll('_',' ')}</option>{/each}</select></label><p class="field-hint">Dates use this time zone. Daylight-saving changes follow the local clock.</p>
+    <label class="field-label">Time zone<select aria-label="Time zone" bind:value={zone}>{#each Object.values(timeZones) as tz (tz)}<option value={tz}>{tz.replaceAll('_',' ')}</option>{/each}</select></label><p class="field-hint">Dates use this time zone. Daylight-saving changes follow the local clock.</p>
 <!-- eslint-disable-next-line functional/functional-parameters -- Update the browser event editor color from its picker button. -->
     <fieldset class="color-field"><legend>Make it your color</legend><div class="color-picker">{#each palette as swatch (swatch)}<button type="button" class:color-selected={color===swatch} style={`--swatch:${swatch}`} aria-label={`Use color ${swatch}`} aria-pressed={color===swatch} onclick={()=>color=swatch}>{color===swatch ? '✓' : ''}</button>{/each}<label class="custom-color" title="Choose any color"><input type="color" bind:value={color} aria-label="Custom bar color"/><span>＋</span></label></div></fieldset>
     <div class="mini-preview"><span>{emoji} {title || 'Your next little moment'}</span><div style={`background:${color}`}></div></div>

@@ -7,8 +7,6 @@ import svelte from 'eslint-plugin-svelte';
 import astro from 'eslint-plugin-astro';
 import globals from 'globals';
 
-const extraFileExtensions = ['.svelte', '.astro'];
-
 export default defineConfig(
   globalIgnores([
     '**/node_modules/**', '**/dist/**', '**/.astro/**', '**/.wrangler/**',
@@ -23,7 +21,7 @@ export default defineConfig(
       parserOptions: {
         project: './tsconfig.eslint.json',
         tsconfigRootDir: fileURLToPath(new URL('.', import.meta.url)),
-        extraFileExtensions,
+        extraFileExtensions: ['.svelte', '.astro'],
       },
     },
     // "all" includes every nondeprecated rule and is a superset of "strict".
@@ -34,7 +32,7 @@ export default defineConfig(
   {
     name: 'monorepo/framework-typescript',
     files: ['**/*.svelte', '**/*.astro', '**/*.svelte.{js,ts}'],
-    languageOptions: { parserOptions: { parser: ts.parser, extraFileExtensions } },
+    languageOptions: { parserOptions: { parser: ts.parser, extraFileExtensions: ['.svelte', '.astro'] } },
   },
   {
     name: 'web/lifecycle-and-reactivity',

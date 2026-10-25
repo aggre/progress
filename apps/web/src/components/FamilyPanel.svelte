@@ -5,6 +5,7 @@
   let { identity, onclose }: { identity: Identity; onclose: () => void } = $props();
   // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native dialog element at the DOM boundary.
   let dialog: HTMLDialogElement;
+  // eslint-disable-next-line functional/prefer-immutable-types -- Svelte owns this reactive family-member proxy; HTTP loads and additions replace its browser state.
   let members = $state<User[]>([]);
   let family = $state<Family | null>(null);
   let loading = $state(true);
@@ -16,7 +17,7 @@
   async function load() {
     loading = true; error = '';
     // eslint-disable-next-line functional/no-try-statements -- Handle family API failures and always clear the browser loading state.
-    try { const result = await api<{ family: Family; members: User[] }>('/api/family'); family = result.family; members = result.members; }
+    try { ({ family, members } = await api<{ family: Family; members: User[] }>('/api/family')); }
     catch (e) { error = e instanceof Error ? e.message : 'Unable to load your family.'; }
     finally { loading = false; }
   }

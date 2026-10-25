@@ -46,16 +46,16 @@ events.post('/', async c => {
   const allowed = await throttle(c, 'event-write', 60, 60, user.id);
   const input = allowed ? await jsonObject(c).then(validateEvent).catch(validationFailure)
     : { error: 'Please slow down.' } as const;
-  if (!allowed || 'error' in input) return c.json(input, allowed ? 400 : 429);
-  const id = crypto.randomUUID(), stamp = new Date().toISOString();
-  const result: WriteResult = await c.env.DB.prepare('INSERT INTO events (id,owner_id,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM events WHERE owner_id=?)<500')
-    .bind(id, user.id, input.title, input.emoji, input.color, input.startAt, input.targetAt, input.repeatUnit, input.repeatEvery, input.timeZone, stamp, stamp, user.id).run();
-  const event: Readonly<ScheduleRecord> = {
-    id, ...input, createdAt: stamp, updatedAt: stamp,
-    createdBy: { id: user.id, username: user.username }, canEdit: true,
-  };
-  return !result.meta.changes ? c.json({ error: 'You have reached the limit of 500 events.' }, 409)
-    : c.json({ event }, 201);
+  const valid = allowed && !('error' in input);
+  const id = valid ? crypto.randomUUID() : '', stamp = valid ? new Date().toISOString() : '';
+  const result: WriteResult | null = valid ? await c.env.DB.prepare('INSERT INTO events (id,owner_id,title,emoji,color,start_at,target_at,repeat_unit,repeat_every,time_zone,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM events WHERE owner_id=?)<500')
+    .bind(id, user.id, input.title, input.emoji, input.color, input.startAt, input.targetAt, input.repeatUnit, input.repeatEvery, input.timeZone, stamp, stamp, user.id).run() : null;
+  return !valid ? c.json(input, allowed ? 400 : 429)
+    : !result?.meta.changes ? c.json({ error: 'You have reached the limit of 500 events.' }, 409)
+    : c.json({ event: {
+      id, ...input, createdAt: stamp, updatedAt: stamp,
+      createdBy: { id: user.id, username: user.username }, canEdit: true,
+    } satisfies Readonly<ScheduleRecord> }, 201);
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register schedule update using the native Hono request context and D1/response completion Promise.
@@ -64,13 +64,14 @@ events.put('/:id', async c => {
   const allowed = await throttle(c, 'event-write', 60, 60, owner);
   const input = allowed ? await jsonObject(c).then(validateEvent).catch(validationFailure)
     : { error: 'Please slow down.' } as const;
-  if (!allowed || 'error' in input) return c.json(input, allowed ? 400 : 429);
-  const id = c.req.param('id'), stamp = new Date().toISOString();
-  const result: WriteResult = await c.env.DB.prepare('UPDATE events SET title=?,emoji=?,color=?,start_at=?,target_at=?,repeat_unit=?,repeat_every=?,time_zone=?,updated_at=? WHERE id=? AND owner_id=?')
-    .bind(input.title, input.emoji, input.color, input.startAt, input.targetAt, input.repeatUnit, input.repeatEvery, input.timeZone, stamp, id, owner).run();
-  const row = result.meta.changes
+  const valid = allowed && !('error' in input);
+  const id = valid ? c.req.param('id') : '', stamp = valid ? new Date().toISOString() : '';
+  const result: WriteResult | null = valid ? await c.env.DB.prepare('UPDATE events SET title=?,emoji=?,color=?,start_at=?,target_at=?,repeat_unit=?,repeat_every=?,time_zone=?,updated_at=? WHERE id=? AND owner_id=?')
+    .bind(input.title, input.emoji, input.color, input.startAt, input.targetAt, input.repeatUnit, input.repeatEvery, input.timeZone, stamp, id, owner).run() : null;
+  const row = result?.meta.changes
     ? await c.env.DB.prepare('SELECT e.*, u.username FROM events e JOIN users u ON u.id=e.owner_id WHERE e.id=? AND e.owner_id=?').bind(id, owner).first<Row>() : null;
-  return !result.meta.changes ? c.json({ error: 'This event no longer exists.' }, 404)
+  return !valid ? c.json(input, allowed ? 400 : 429)
+    : !result?.meta.changes ? c.json({ error: 'This event no longer exists.' }, 404)
     : c.json({ event: row ? map(row, owner) : null });
 });
 

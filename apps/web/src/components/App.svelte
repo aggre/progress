@@ -78,10 +78,11 @@
     // eslint-disable-next-line functional/no-try-statements -- Handle identity API failures and always clear the browser session-check state.
     try {
       const verified = await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, token);
-      if (getSession() !== token) return;
-      identity = verified;
-      error = '';
-      void (approval && await inspectApproval());
+      void (getSession() === token && (
+        identity = verified,
+        error = '',
+        approval && await inspectApproval()
+      ));
     } catch (e) {
       identity = null;
       void (e instanceof ApiError && e.status === 401

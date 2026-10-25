@@ -66,7 +66,7 @@ await test('empty installation exposes no app data and has no public registratio
  assert.equal((await f.request('/api/family/members','POST',{username:'new-user'})).status,401);
  for(const path of ['/api/auth/register','/api/auth/bootstrap','/api/register','/api/bootstrap'])assert.equal((await f.request(path,'POST',{username:'new-user'})).status,404);
  const c:Readonly<LoginChallenge>=await f.challenge('unknown-user');
- assert.deepEqual([(await f.request('/api/me','GET',undefined,c.sessionToken)).status,(await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).status,await f.db.prepare('SELECT count(*) AS n FROM users').first('n')],[401,200,0]);
+ return assert.deepEqual([(await f.request('/api/me','GET',undefined,c.sessionToken)).status,(await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).status,await f.db.prepare('SELECT count(*) AS n FROM users').first('n')],[401,200,0]);
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
@@ -103,7 +103,7 @@ await test('unknown and registered usernames have the same challenge response an
   new Set([known.pollToken,known.approvalToken,known.sessionToken]).size,
  ],[Object.keys(unknown).sort(),unknown.pollInterval,true,3]);
  for(const token of [known.approvalToken,known.sessionToken])assert.equal((await f.request(`/api/auth/challenges/${known.id}/poll`,'POST',{pollToken:token})).status,404);
- assert.deepEqual([(await f.request(`/api/auth/challenges/${known.id}/approve`,'POST',{approvalToken:known.pollToken},first.sessionToken)).status,(await f.request(`/api/auth/challenges/${known.id}/approve`,'POST',{approvalToken:known.approvalToken})).status,(await f.request(`/api/auth/challenges/${unknown.id}/inspect`,'POST',{approvalToken:unknown.approvalToken},first.sessionToken)).status,(await f.request('/api/me','GET',undefined,known.sessionToken)).status],[404,401,404,401]);
+ return assert.deepEqual([(await f.request(`/api/auth/challenges/${known.id}/approve`,'POST',{approvalToken:known.pollToken},first.sessionToken)).status,(await f.request(`/api/auth/challenges/${known.id}/approve`,'POST',{approvalToken:known.approvalToken})).status,(await f.request(`/api/auth/challenges/${unknown.id}/inspect`,'POST',{approvalToken:unknown.approvalToken},first.sessionToken)).status,(await f.request('/api/me','GET',undefined,known.sessionToken)).status],[404,401,404,401]);
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
@@ -135,7 +135,7 @@ await test('same-family approval works across users, is idempotent, and cannot r
  // Even cleanup removing the expired row must not make a replay activate it again.
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('DELETE FROM sessions WHERE expires_at=0').run();
- assert.deepEqual([(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status,(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[409,401]);
+ return assert.deepEqual([(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status,(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[409,401]);
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
@@ -188,7 +188,7 @@ await test('family members share existing and new schedules while only creators 
  const memberEvent=((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event;
  assert.deepEqual([memberEvent.canEdit,memberEvent.createdBy.username],[true,'family-member']);
  const combined=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.deepEqual([
+ return assert.deepEqual([
   combined.events.length,
   combined.events.find((e:Readonly<ScheduleRecord>)=>e.id===memberEvent.id)?.canEdit,
   (await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,first.sessionToken)).status,
@@ -212,7 +212,7 @@ await test('family schedule reads include existing events beyond the former 500-
    '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', 'none', 1, 'UTC', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
   FROM numbers`).bind(owner.userId,member.id).run();
  const result=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.deepEqual([
+ return assert.deepEqual([
   result.events.length,
   result.events.filter((e:Readonly<ScheduleRecord>)=>e.canEdit).length,
   result.events.find((e:Readonly<ScheduleRecord>)=>e.createdBy.id===member.id)?.canEdit,
@@ -243,7 +243,7 @@ await test('expired challenges and sessions cannot be approved or authenticated,
  assert.equal((await f.request('/api/me','GET',undefined,knownExpired.sessionToken)).status,401);
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('UPDATE sessions SET expires_at=unixepoch()-1').run();
- assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,401);
+ return assert.equal((await f.request('/api/me','GET',undefined,winner.sessionToken)).status,401);
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
@@ -267,7 +267,7 @@ await test('origin checks, request bounds, malformed input and login rate limits
   (await f.request('/api/auth/challenges','POST',[])).status,
  ],[204,origin,true,400,413,400]);
  for(let i=0;i<5;i++)await f.request('/api/auth/challenges','POST',{username:'rate-test-'+i});
- assert.deepEqual([
+ return assert.deepEqual([
   (await f.request('/api/auth/challenges','POST',{username:'rate-over-limit'})).status,
   await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),
  ],[429,0]);
@@ -296,5 +296,5 @@ await test('legacy events are preserved and require an explicit operator ownersh
  await insertLegacy(claimed);const d:Readonly<LoginChallenge>=await claimed.challenge('first-user');
  // eslint-disable-next-line functional/no-expression-statements -- Apply the operator approval to this isolated test database.
  await claimed.bootstrap(d,'first-user',1);
- const legacyTitle=((await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json()) as Readonly<{events:ReadonlyArray<Readonly<{title:string}>>}>).events[0].title;assert.deepEqual([legacyTitle,await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n')],['Preserved legacy event',1]);
+ const legacyTitle=((await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json()) as Readonly<{events:ReadonlyArray<Readonly<{title:string}>>}>).events[0].title;return assert.deepEqual([legacyTitle,await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n')],['Preserved legacy event',1]);
 });

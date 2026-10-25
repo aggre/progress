@@ -4,7 +4,7 @@ import { cycle, fromLocal, shift, validateEvent, remainingText, starterEvents, t
 const event: Readonly<EventInput> = { title:'Deadline',emoji:'✨',color:'#7ba989',startAt:'2026-01-01T00:00:00Z',targetAt:'2026-01-02T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'UTC' };
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters, functional/no-return-void -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('one-time progress clamps before start and after completion',()=>{
-  assert.deepEqual([
+  return assert.deepEqual([
     cycle(event,Date.parse('2025-12-31T00:00Z')).progress,
     cycle(event,Date.parse('2026-01-01T12:00Z')).progress,
     cycle(event,Date.parse(event.targetAt)).complete,
@@ -15,7 +15,7 @@ await test('one-time progress clamps before start and after completion',()=>{
 await test('recurrence advances exactly at the boundary',()=>{
   const e: Readonly<EventInput>={...event,repeatUnit:'minute'};
   const c=cycle(e,Date.parse(e.targetAt));
-  assert.deepEqual([c.progress,c.remaining,cycle(e,Date.parse(e.targetAt)+30000).progress],[0,60000,50]);
+  return assert.deepEqual([c.progress,c.remaining,cycle(e,Date.parse(e.targetAt)+30000).progress],[0,60000,50]);
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters, functional/no-return-void -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('old minutely schedules jump efficiently without drift',()=>{

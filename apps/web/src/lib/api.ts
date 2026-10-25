@@ -19,7 +19,8 @@ export function clearSession() {
 export function sessionStorageKey(value: string) { return `${STORAGE_NAMESPACE}:${value}`; }
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) { super(message); this.name = 'ApiError'; }
+  constructor(message: string, public readonly status: number) { super(message); }
+  override readonly name = 'ApiError';
 }
 function apiFailure(message: string, status: number): never { throw new ApiError(message, status); }
 // eslint-disable-next-line functional/prefer-immutable-types -- The browser HTTP client returns the native fetch and response parsing completion Promise.

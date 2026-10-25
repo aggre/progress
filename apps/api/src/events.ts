@@ -34,11 +34,10 @@ events.use('*', requireAuth);
 events.get('/', async c => {
   const user: Readonly<User> = c.get('identity').user;
   // Resolve sharing through the creator's current family, including existing events.
-  const result = await c.env.DB.prepare(`
+  return c.json({ events: (await c.env.DB.prepare(`
     SELECT e.*, u.username FROM events e JOIN users u ON u.id = e.owner_id
     WHERE u.family_id = ? ORDER BY e.created_at, e.id
-  `).bind(user.familyId).all<Row>();
-  return c.json({ events: result.results.map(row => map(row, user.id)) });
+  `).bind(user.familyId).all<Row>()).results.map(row => map(row, user.id)) });
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register schedule creation using the native Hono request context and D1/response completion Promise.

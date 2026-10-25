@@ -5,6 +5,7 @@ import { auth } from './auth';
 import { events } from './events';
 import { jsonObject,memberUsername,requireAuth,throttle } from './security';
 import type { AppEnv,ApiBindings } from './types';
+function rethrow(error:unknown):never { throw error; }
 // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native Hono router instance to register HTTP middleware and routes.
 const app=new Hono<AppEnv>();
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the HTTP origin middleware, which updates the native Hono context and returns its dispatch completion Promise.
@@ -45,7 +46,7 @@ app.get('/api/me',requireAuth,c=>c.json(c.get('identity')));
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the family listing endpoint using the native Hono context and D1/response completion Promise.
 app.get('/api/family',requireAuth,async c=>{
  const family=c.get('identity').family;
- const r=await c.env.DB.prepare('SELECT id,username,family_id AS familyId FROM users WHERE family_id=? ORDER BY created_at,id LIMIT 50').bind(family.id).all();return c.json({family,members:r.results});
+ return c.json({family,members:(await c.env.DB.prepare('SELECT id,username,family_id AS familyId FROM users WHERE family_id=? ORDER BY created_at,id LIMIT 50').bind(family.id).all()).results});
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the family member creation endpoint using the native Hono context and D1/response completion Promise.
 app.post('/api/family/members',requireAuth,async c=>{
@@ -60,7 +61,7 @@ app.post('/api/family/members',requireAuth,async c=>{
  try{
   const {meta:{changes}}:Readonly<{meta:Readonly<{changes:number}>}>=await c.env.DB.prepare('INSERT INTO users (id,username,family_id) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM users WHERE family_id=?)<50').bind(id,name,identity.family.id,identity.family.id).run();
   if(!changes)return c.json({error:'This family has reached its limit of 50 members.'},409);
- }catch(e){if(e instanceof Error&&e.message.includes('UNIQUE'))return c.json({error:'That username is not available.'},409);throw e;}
+ }catch(e){return e instanceof Error&&e.message.includes('UNIQUE') ? c.json({error:'That username is not available.'},409) : rethrow(e);}
  return c.json({user:{id,username:name,familyId:identity.family.id}},201);
 });
 // Use a schedule-specific path; /api/events on workers.dev matches EasyPrivacy.

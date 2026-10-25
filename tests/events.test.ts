@@ -40,9 +40,8 @@ await test('leap-day recurrence recovers February 29 in leap years',()=>{
 await test('daily wall-clock recurrence follows daylight saving',()=>{
   const e: Readonly<EventInput>={...event,targetAt:fromLocal('2026-03-07T09:00','America/New_York'),repeatUnit:'day',timeZone:'America/New_York'};
   const c=cycle(e,Date.parse('2026-03-08T00:00Z'));
-  assert.deepEqual([c.end-c.start,new Date(c.end).toISOString()],[23*3600000,'2026-03-08T13:00:00.000Z']);
   const fall: Readonly<EventInput>={...e,targetAt:fromLocal('2026-10-31T09:00','America/New_York')};
-  const f=cycle(fall,Date.parse('2026-11-01T00:00Z'));return assert.equal(f.end-f.start,25*3600000);
+  const f=cycle(fall,Date.parse('2026-11-01T00:00Z'));return assert.deepEqual([c.end-c.start,new Date(c.end).toISOString(),f.end-f.start],[23*3600000,'2026-03-08T13:00:00.000Z',25*3600000]);
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters, functional/no-return-void -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('future recurring events keep their first target',()=>{
@@ -59,9 +58,8 @@ await test('calendar intervals and timezone conversion',()=>{
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('validates dates, colors, names, intervals and timezone',()=>{
-  assert.equal(validateEvent(event).title,'Deadline');
   // eslint-disable-next-line functional/functional-parameters -- The assertion API invokes this parameterless callback to capture the expected validation exception.
-  return void ([{title:''},{color:'red'},{repeatEvery:0},{repeatEvery:1.5},{repeatUnit:'fortnight'},{timeZone:'Not/AZone'},{startAt:event.targetAt},{targetAt:'invalid'}] as const).every(invalid => (assert.throws((): Readonly<EventInput>=>validateEvent({...event,...invalid})), true));
+  return void (assert.equal(validateEvent(event).title,'Deadline'), ([{title:''},{color:'red'},{repeatEvery:0},{repeatEvery:1.5},{repeatUnit:'fortnight'},{timeZone:'Not/AZone'},{startAt:event.targetAt},{targetAt:'invalid'}] as const).every(invalid => (assert.throws((): Readonly<EventInput>=>validateEvent({...event,...invalid})), true)));
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/functional-parameters -- Register this runner lifecycle callback; it needs no context argument and reports assertion results without a return value.
 await test('all starter events are valid',()=>{

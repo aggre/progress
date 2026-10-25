@@ -44,8 +44,7 @@ async function fixture(t:TestContext){
  async function challenge(name:string){
   // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response to check its status and consume its JSON body.
   const response=await request('/api/auth/challenges','POST',{username:name});
-  assert.equal(response.status,201);
-  return await response.json() as LoginChallenge;
+  return (assert.equal(response.status,201), await response.json() as LoginChallenge);
  }
  // eslint-disable-next-line functional/prefer-immutable-types -- The operator bootstrap writes to D1 and returns its native completion Promise.
  async function bootstrap(challenge:Readonly<LoginChallenge>,name:string,claimLegacy=0){
@@ -86,7 +85,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
  assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),1);
  // D1 stores only token hashes, never the three capabilities returned to the browser.
  const row=await f.db.prepare('SELECT poll_hash,approval_hash,session_hash FROM login_challenges WHERE id=?').bind(c.id).first<Readonly<Record<string,string>>>();
- for(const [field,token] of [['poll_hash',c.pollToken],['approval_hash',c.approvalToken],['session_hash',c.sessionToken]])assert.equal(row?.[field],createHash('sha256').update(token).digest('hex'));
+ return void ([{field:'poll_hash',token:c.pollToken},{field:'approval_hash',token:c.approvalToken},{field:'session_hash',token:c.sessionToken}] as const).every(entry => (assert.equal(row?.[entry.field],createHash('sha256').update(entry.token).digest('hex')), true));
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.

@@ -23,6 +23,7 @@ export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
   override readonly name = 'ApiError';
 }
+// eslint-disable-next-line functional/no-throw-statements -- Reject failed fetch, response parsing, and HTTP status outcomes through the browser API error contract.
 function apiFailure(message: string, status: number): never { throw new ApiError(message, status); }
 // eslint-disable-next-line functional/prefer-immutable-types -- The browser HTTP client returns the native fetch and response parsing completion Promise.
 export async function api<T = { ok: boolean }>(path: string, method = 'GET', data?: unknown, token: string | null = getSession()): Promise<T> {

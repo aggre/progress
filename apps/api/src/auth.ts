@@ -21,11 +21,15 @@ auth.post('/challenges',async c=>{
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the login polling HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges/:id/poll',async c=>{
- if(!await throttle(c,'poll',240))return c.json({error:'Please slow down.'},429);
- const id=c.req.param('id');const input=await jsonObject(c).catch(always(null));
- if(!input||!validId(id)||!validToken(input.pollToken))return c.json({error:'Invalid login request.'},400);
- const row=await c.env.DB.prepare('SELECT status,expires_at FROM login_challenges WHERE id=? AND poll_hash=?').bind(id,await hash(input.pollToken)).first<Readonly<{status:string;expires_at:number}>>();
- return !row ? c.json({error:'Login request not found.'},404)
+ const allowed=await throttle(c,'poll',240);
+ const id=allowed ? c.req.param('id') : undefined;
+ const input=allowed ? await jsonObject(c).catch(always(null)) : null;
+ const pollToken=input?.pollToken;
+ const valid=!!input&&validId(id)&&validToken(pollToken);
+ const row=valid ? await c.env.DB.prepare('SELECT status,expires_at FROM login_challenges WHERE id=? AND poll_hash=?').bind(id,await hash(pollToken)).first<Readonly<{status:string;expires_at:number}>>() : null;
+ return !allowed ? c.json({error:'Please slow down.'},429)
+  : !valid ? c.json({error:'Invalid login request.'},400)
+  : !row ? c.json({error:'Login request not found.'},404)
   : row.expires_at<=Math.floor(Date.now()/1000) ? c.json({status:'expired'})
   : c.json({status:row.status});
 });
@@ -43,23 +47,26 @@ async function approval(c: Parameters<typeof jsonObject>[0]) {
 }
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the approval inspection HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges/:id/inspect',requireAuth,async c=>{
- if(!await throttle(c,'inspect',60))return c.json({error:'Please slow down.'},429);
- const row=await approval(c).catch(always(undefined));
- return row===undefined ? c.json({error:'Invalid approval request.'},400)
+ const allowed=await throttle(c,'inspect',60);
+ const row=allowed ? await approval(c).catch(always(undefined)) : null;
+ return !allowed ? c.json({error:'Please slow down.'},429)
+  : row===undefined ? c.json({error:'Invalid approval request.'},400)
   : !row ? c.json({error:'This request is unavailable, expired, or outside your family.'},404)
   : c.json({username:row.username,verificationCode:row.verification_code,expiresAt:row.expires_at*1000});
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the login approval HTTP endpoint using the native Hono request context and D1/response completion Promise.
 auth.post('/challenges/:id/approve',requireAuth,async c=>{
- if(!await throttle(c,'approve',30))return c.json({error:'Please slow down.'},429);
- const row=await approval(c).catch(always(undefined));
- if(!row)return row===undefined ? c.json({error:'Invalid approval request.'},400)
-  : c.json({error:'This request is unavailable, expired, or outside your family.'},404);
- const now=Math.floor(Date.now()/1000);
+ const allowed=await throttle(c,'approve',30);
+ const row=allowed ? await approval(c).catch(always(undefined)) : null;
+ const now=row ? Math.floor(Date.now()/1000) : 0;
  // The database trigger activates the pre-issued session exactly once on pending -> approved.
- // eslint-disable-next-line functional/no-expression-statements -- Persist the login approval in D1 so its trigger activates the pre-issued session.
- await c.env.DB.prepare("UPDATE login_challenges SET status='approved',approved_user_id=?,approved_by=?,approved_at=? WHERE id=? AND status='pending' AND expires_at>?").bind(row.target_id,c.get('identity').user.id,now,row.id,now).run();
- // A repeated approval cannot reactivate a logged-out session.
- const session=await c.env.DB.prepare('SELECT 1 AS active FROM sessions WHERE challenge_id=? AND expires_at>?').bind(row.id,now).first<Readonly<{active:number}>>();
- return session?c.json({status:'approved'}):c.json({error:'This login request has expired.'},409);
+ // Await persistence before checking the session; a replay cannot reactivate a logged-out session.
+ const session=row ? await (
+  await c.env.DB.prepare("UPDATE login_challenges SET status='approved',approved_user_id=?,approved_by=?,approved_at=? WHERE id=? AND status='pending' AND expires_at>?").bind(row.target_id,c.get('identity').user.id,now,row.id,now).run(),
+  c.env.DB.prepare('SELECT 1 AS active FROM sessions WHERE challenge_id=? AND expires_at>?').bind(row.id,now).first<Readonly<{active:number}>>()
+ ) : null;
+ return !allowed ? c.json({error:'Please slow down.'},429)
+  : row===undefined ? c.json({error:'Invalid approval request.'},400)
+  : !row ? c.json({error:'This request is unavailable, expired, or outside your family.'},404)
+  : session ? c.json({status:'approved'}) : c.json({error:'This login request has expired.'},409);
 });

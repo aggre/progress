@@ -77,7 +77,8 @@ events.put('/:id', async c => {
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register schedule deletion using the native Hono request context and D1/response completion Promise.
 events.delete('/:id', async c => {
   const owner = c.get('identity').user.id;
-  if (!await throttle(c, 'event-write', 60, 60, owner)) return c.json({ error: 'Please slow down.' }, 429);
-  const result: WriteResult = await c.env.DB.prepare('DELETE FROM events WHERE id=? AND owner_id=?').bind(c.req.param('id'), owner).run();
-  return result.meta.changes ? c.json({ ok: true }) : c.json({ error: 'This event no longer exists.' }, 404);
+  const allowed = await throttle(c, 'event-write', 60, 60, owner);
+  const result: WriteResult | null = allowed ? await c.env.DB.prepare('DELETE FROM events WHERE id=? AND owner_id=?').bind(c.req.param('id'), owner).run() : null;
+  return !allowed ? c.json({ error: 'Please slow down.' }, 429)
+    : result?.meta.changes ? c.json({ ok: true }) : c.json({ error: 'This event no longer exists.' }, 404);
 });

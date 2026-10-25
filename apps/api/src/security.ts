@@ -1,5 +1,4 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import type { Identity } from '@little/shared/api';
 import type { AppEnv } from './types';
 export const CHALLENGE_SECONDS=300;
 export const SESSION_SECONDS=30*86400;
@@ -33,15 +32,13 @@ export async function throttle(c: Context<AppEnv>,scope: string,limit: number,pe
 // eslint-disable-next-line functional/prefer-immutable-types -- Authenticate the native Hono request context and return the downstream middleware completion Promise.
 export const requireAuth:MiddlewareHandler<AppEnv>=async(c,next)=>{
  const token=c.req.header('Authorization')?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
- if(!token)return c.json({error:'Please log in to continue.'},401);
- const tokenHash=await hash(token);
- const row=await c.env.DB.prepare('SELECT u.id,u.username,u.family_id,f.name AS family_name FROM sessions s JOIN users u ON u.id=s.user_id JOIN families f ON f.id=u.family_id WHERE s.token_hash=? AND s.expires_at>unixepoch()').bind(tokenHash).first<Readonly<{id:string;username:string;family_id:string;family_name:string}>>();
- if(!row)return c.json({error:'Your session has expired. Please log in again.'},401);
- const identity:Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>={user:{id:row.id,username:row.username,familyId:row.family_id},family:{id:row.family_id,name:row.family_name}};
- // eslint-disable-next-line functional/no-expression-statements -- Store the verified identity in the current Hono request context.
- c.set('identity',identity);
- // eslint-disable-next-line functional/no-expression-statements -- Store the verified session hash in the current Hono request context for logout.
- c.set('sessionHash',tokenHash);
- // eslint-disable-next-line functional/no-expression-statements -- Dispatch the authenticated request to downstream Hono middleware.
- await next();
+ const tokenHash=token ? await hash(token) : '';
+ const row=token ? await c.env.DB.prepare('SELECT u.id,u.username,u.family_id,f.name AS family_name FROM sessions s JOIN users u ON u.id=s.user_id JOIN families f ON f.id=u.family_id WHERE s.token_hash=? AND s.expires_at>unixepoch()').bind(tokenHash).first<Readonly<{id:string;username:string;family_id:string;family_name:string}>>() : null;
+ return !token ? c.json({error:'Please log in to continue.'},401)
+  : !row ? c.json({error:'Your session has expired. Please log in again.'},401)
+  : (
+   c.set('identity',{user:{id:row.id,username:row.username,familyId:row.family_id},family:{id:row.family_id,name:row.family_name}}),
+   c.set('sessionHash',tokenHash),
+   await next()
+  );
 };

@@ -5,6 +5,7 @@ import { auth } from './auth';
 import { events } from './events';
 import { jsonObject,memberUsername,requireAuth,throttle } from './security';
 import type { AppEnv,ApiBindings } from './types';
+// eslint-disable-next-line functional/no-throw-statements -- Propagate unexpected D1 failures to Hono’s request error boundary without changing the original rejection.
 function rethrow(error:unknown):never { throw error; }
 // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native Hono router instance to register HTTP middleware and routes.
 const app=new Hono<AppEnv>();

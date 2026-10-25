@@ -61,8 +61,10 @@ await test('empty installation exposes no app data and has no public registratio
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t);
   // Previous browser bundles stay protected.
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const path of (assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),(await f.request('/api/events')).status],[0,401]), ['/api/me','/api/schedules','/api/family']))assert.equal((await f.request(path)).status,401);
 
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const path of (assert.equal((await f.request('/api/family/members','POST',{username:'new-user'})).status,401), ['/api/auth/register','/api/auth/bootstrap','/api/register','/api/bootstrap']))assert.equal((await f.request(path,'POST',{username:'new-user'})).status,404);
  const c:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  return assert.deepEqual([(await f.request('/api/me','GET',undefined,c.sessionToken)).status,(await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).status,await f.db.prepare('SELECT count(*) AS n FROM users').first('n')],[401,200,0]);
@@ -72,6 +74,7 @@ await test('empty installation exposes no app data and has no public registratio
 await test('operator bootstrap atomically creates one family/user and activates only the applicant token',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const token of [c.pollToken,c.approvalToken,c.sessionToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
  await assert.rejects(f.bootstrap(c,'wrong-user'));
 
@@ -79,6 +82,7 @@ await test('operator bootstrap atomically creates one family/user and activates 
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);
  const identity=(assert.equal(response.status,200), await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>);
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const token of (assert.deepEqual([identity.user.id,identity.family.id],[created.userId,created.familyId]), [c.pollToken,c.approvalToken]))assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
 
  await (assert.deepEqual([await (await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).json(),await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n')],[{status:'approved'},1]), assert.rejects(f.bootstrap(await f.challenge('second-user'),'second-user')));
@@ -96,6 +100,7 @@ await test('unknown and registered usernames have the same challenge response an
  await f.bootstrap(first,'registered-user');
  const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
 
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const token of (assert.deepEqual([
   Object.keys(known).sort(),
   known.pollInterval,
@@ -124,7 +129,8 @@ await test('same-family approval works across users, is idempotent, and cannot r
  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Each independent concurrent approval callback needs no input and returns its native HTTP completion Promise.
  const approvals:Readonly<Record<string,number>>=(assert.deepEqual([inspection.username,inspection.verificationCode],['family_member',member.verificationCode]), await Promise.all([1,2].map(async()=>(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status)).then(zipObj(['first','second'])));
  assert.deepEqual([approvals.first,approvals.second],[200,200]);
- for(let i=0;i<2;i++)assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken:member.pollToken})).json(),{status:'approved'});
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
+ for(const pollToken of [member.pollToken,member.pollToken])assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken})).json(),{status:'approved'});
 
  const memberCount=(assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM sessions WHERE challenge_id=?').bind(member.id).first('n'),(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[1,200]), ((await (await f.request('/api/family','GET',undefined,member.sessionToken)).json()) as Readonly<{members:ReadonlyArray<Identity['user']>}>).members.length);
  void (assert.deepEqual([
@@ -154,6 +160,7 @@ await test('family members share existing and new schedules while only creators 
   f.db.prepare("UPDATE login_challenges SET status='approved',approved_user_id=?,approved_at=unixepoch() WHERE id=?").bind(userId,outsider.id)
  ]);
  const attempt:Readonly<LoginChallenge>=await f.challenge('family-member');
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const action of ['inspect','approve'])assert.equal((await f.request(`/api/auth/challenges/${attempt.id}/${action}`,'POST',{approvalToken:attempt.approvalToken},outsider.sessionToken)).status,404);
 
  const event:Readonly<EventInput>=(assert.equal((await f.request('/api/me','GET',undefined,attempt.sessionToken)).status,401), {title:'Family event',emoji:'🌿',color:'#7ba989',startAt:'2026-10-01T00:00:00Z',targetAt:'2026-12-01T00:00:00Z',repeatUnit:'none',repeatEvery:1,timeZone:'Asia/Tokyo'});
@@ -163,6 +170,7 @@ await test('family members share existing and new schedules while only creators 
 
  const shared=(assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]), await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]});
 
+ // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const token of (assert.deepEqual([
   shared.events.length,
   shared.events[0].id,
@@ -265,7 +273,7 @@ await test('origin checks, request bounds, malformed input and login rate limits
   (await f.request('/api/auth/challenges','POST',{username:'a'.repeat(9000)})).status,
   (await f.request('/api/auth/challenges','POST',[])).status,
  ],[204,origin,true,400,413,400]);
- for(let i=0;i<5;i++)await f.request('/api/auth/challenges','POST',{username:'rate-test-'+i});
+ for(const i of [0,1,2,3,4])await f.request('/api/auth/challenges','POST',{username:'rate-test-'+i});
  return assert.deepEqual([
   (await f.request('/api/auth/challenges','POST',{username:'rate-over-limit'})).status,
   await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),

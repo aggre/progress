@@ -23,7 +23,9 @@
   }
   // eslint-disable-next-line functional/prefer-immutable-types -- The browser form handler consumes its native SubmitEvent and returns the API completion Promise.
   async function add(event: SubmitEvent) {
-    event.preventDefault(); if (saving) return;
+    event.preventDefault();
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate native form submissions while the current member creation request is in flight.
+    if (saving) return;
     saving = true; error = ''; notice = '';
     // eslint-disable-next-line functional/no-try-statements -- Handle member creation API failures and always clear the browser saving state.
     try {

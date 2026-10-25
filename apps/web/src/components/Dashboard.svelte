@@ -74,13 +74,14 @@
   });
   // eslint-disable-next-line functional/prefer-immutable-types -- This browser dialog or API operation returns its native completion Promise.
   async function openEditor(event: Readonly<ScheduleRecord> | null=null) {
-    if (event && !event.canEdit) return;
-    editing=event; formError=''; saving=false;
-    zone=event?.timeZone || 'Asia/Tokyo';
-    title=event?.title || ''; emoji=event?.emoji || '✨'; color=event?.color || palette[events.length % Object.values(palette).length];
-    repeatUnit=event?.repeatUnit || 'none'; repeatEvery=event?.repeatEvery || 1;
-    targetLocal=toLocal(event?.targetAt || new Date(Date.now()+86400000*7).toISOString(),zone);
-    dialog.showModal(); await tick(); nameInput?.focus();
+    return event && !event.canEdit ? undefined : (
+      editing=event, formError='', saving=false,
+      zone=event?.timeZone || 'Asia/Tokyo',
+      title=event?.title || '', emoji=event?.emoji || '✨', color=event?.color || palette[events.length % Object.values(palette).length],
+      repeatUnit=event?.repeatUnit || 'none', repeatEvery=event?.repeatEvery || 1,
+      targetLocal=toLocal(event?.targetAt || new Date(Date.now()+86400000*7).toISOString(),zone),
+      dialog.showModal(), await tick(), nameInput?.focus()
+    );
   }
   // eslint-disable-next-line functional/functional-parameters -- Svelte calls this parameterless two-way binding getter to read the current reactive repeat selection.
   function getRepeatChoice(): RepeatUnit | 'two-weeks' {
@@ -95,7 +96,10 @@
     // eslint-disable-next-line functional/prefer-immutable-types -- Prevent native form submission before sending the edited schedule through the API.
     event: SubmitEvent,
   ) {
-    event.preventDefault(); if (saving) return; saving=true;formError='';
+    event.preventDefault();
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate native form submissions while the current browser save request is in flight.
+    if (saving) return;
+    saving=true;formError='';
     // eslint-disable-next-line functional/no-try-statements -- Handle event API failures and restore the browser saving state.
     try {
       const targetAt=fromLocal(targetLocal,zone);

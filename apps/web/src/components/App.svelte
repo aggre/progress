@@ -100,17 +100,21 @@
   // eslint-disable-next-line functional/prefer-immutable-types -- This browser API operation returns its native completion Promise.
   async function poll(generation: number) {
     const challenge = pending;
+    // eslint-disable-next-line functional/no-conditional-statements -- Cancel obsolete browser polling continuations before they update UI state, storage, or timers.
     if (!challenge || generation !== pollGeneration) return;
     now = Date.now();
+    // eslint-disable-next-line functional/no-conditional-statements -- Stop the browser polling timer and remove its persisted login attempt when the clock or server reports expiry.
     if (challenge.expiresAt <= now) { expired = true; stopPolling(); storageRemove(challengeKey); return; }
     // eslint-disable-next-line functional/no-try-statements -- Handle polling API failures so the browser can report the error and schedule a retry.
     try {
       const result = await api<LoginStatus>(`/api/auth/challenges/${challenge.id}/poll`, 'POST', { pollToken: challenge.pollToken }, null);
+      // eslint-disable-next-line functional/no-conditional-statements -- Cancel obsolete browser polling continuations before they update UI state, storage, or timers.
       if (generation !== pollGeneration) return;
       failures = 0;
       error = '';
       if (result.status === 'approved') {
         const verified = await api<Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>>('/api/me', 'GET', undefined, challenge.sessionToken);
+        // eslint-disable-next-line functional/no-conditional-statements -- Cancel obsolete browser polling continuations before they update UI state, storage, or timers.
         if (generation !== pollGeneration) return;
         saveSession(challenge.sessionToken);
         clearPending();
@@ -119,8 +123,10 @@
         void (approval && await inspectApproval());
         return;
       }
+      // eslint-disable-next-line functional/no-conditional-statements -- Stop the browser polling timer and remove its persisted login attempt when the clock or server reports expiry.
       if (result.status === 'expired') { expired = true; stopPolling(); storageRemove(challengeKey); return; }
     } catch (e) {
+      // eslint-disable-next-line functional/no-conditional-statements -- Cancel obsolete browser polling continuations before they update UI state, storage, or timers.
       if (generation !== pollGeneration) return;
       failures += 1;
       if (e instanceof ApiError && [400, 404, 410].includes(e.status)) { expired = true; stopPolling(); storageRemove(challengeKey); return; }

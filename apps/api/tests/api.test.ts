@@ -60,10 +60,10 @@ async function fixture(t:TestContext){
 await test('empty installation exposes no app data and has no public registration or bootstrap route',async(t)=>{
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
  const f=await fixture(t);
- assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),(await f.request('/api/events')).status],[0,401]); // Previous browser bundles stay protected.
- for(const path of ['/api/me','/api/schedules','/api/family'])assert.equal((await f.request(path)).status,401);
- assert.equal((await f.request('/api/family/members','POST',{username:'new-user'})).status,401);
- for(const path of ['/api/auth/register','/api/auth/bootstrap','/api/register','/api/bootstrap'])assert.equal((await f.request(path,'POST',{username:'new-user'})).status,404);
+  // Previous browser bundles stay protected.
+ for(const path of (assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),(await f.request('/api/events')).status],[0,401]), ['/api/me','/api/schedules','/api/family']))assert.equal((await f.request(path)).status,401);
+
+ for(const path of (assert.equal((await f.request('/api/family/members','POST',{username:'new-user'})).status,401), ['/api/auth/register','/api/auth/bootstrap','/api/register','/api/bootstrap']))assert.equal((await f.request(path,'POST',{username:'new-user'})).status,404);
  const c:Readonly<LoginChallenge>=await f.challenge('unknown-user');
  return assert.deepEqual([(await f.request('/api/me','GET',undefined,c.sessionToken)).status,(await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).status,await f.db.prepare('SELECT count(*) AS n FROM users').first('n')],[401,200,0]);
 });
@@ -78,10 +78,10 @@ await test('operator bootstrap atomically creates one family/user and activates 
  const created:Readonly<{familyId:string;userId:string}>=(assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),await f.db.prepare('SELECT count(*) AS n FROM families').first('n')],[0,0]), await f.bootstrap(c,'first-user'));
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);
- const identity=(assert.equal(response.status,200), await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>);assert.deepEqual([identity.user.id,identity.family.id],[created.userId,created.familyId]);
- for(const token of [c.pollToken,c.approvalToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
- assert.deepEqual([await (await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).json(),await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n')],[{status:'approved'},1]);
- await assert.rejects(f.bootstrap(await f.challenge('second-user'),'second-user'));
+ const identity=(assert.equal(response.status,200), await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>);
+ for(const token of (assert.deepEqual([identity.user.id,identity.family.id],[created.userId,created.familyId]), [c.pollToken,c.approvalToken]))assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
+
+ await (assert.deepEqual([await (await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).json(),await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n')],[{status:'approved'},1]), assert.rejects(f.bootstrap(await f.challenge('second-user'),'second-user')));
 
  // D1 stores only token hashes, never the three capabilities returned to the browser.
  const row=(assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),1), await f.db.prepare('SELECT poll_hash,approval_hash,session_hash FROM login_challenges WHERE id=?').bind(c.id).first<Readonly<Record<string,string>>>());
@@ -95,13 +95,13 @@ await test('unknown and registered usernames have the same challenge response an
  // eslint-disable-next-line functional/no-expression-statements -- Approve the first test user through the isolated D1 bootstrap operation.
  await f.bootstrap(first,'registered-user');
  const known:Readonly<LoginChallenge>=await f.challenge('registered-user'),unknown:Readonly<LoginChallenge>=await f.challenge('unknown-user');
- assert.deepEqual([
+
+ for(const token of (assert.deepEqual([
   Object.keys(known).sort(),
   known.pollInterval,
   Math.abs(known.expiresAt-unknown.expiresAt)<=1000,
   new Set([known.pollToken,known.approvalToken,known.sessionToken]).size,
- ],[Object.keys(unknown).sort(),unknown.pollInterval,true,3]);
- for(const token of [known.approvalToken,known.sessionToken])assert.equal((await f.request(`/api/auth/challenges/${known.id}/poll`,'POST',{pollToken:token})).status,404);
+ ],[Object.keys(unknown).sort(),unknown.pollInterval,true,3]), [known.approvalToken,known.sessionToken]))assert.equal((await f.request(`/api/auth/challenges/${known.id}/poll`,'POST',{pollToken:token})).status,404);
  return assert.deepEqual([(await f.request(`/api/auth/challenges/${known.id}/approve`,'POST',{approvalToken:known.pollToken},first.sessionToken)).status,(await f.request(`/api/auth/challenges/${known.id}/approve`,'POST',{approvalToken:known.approvalToken})).status,(await f.request(`/api/auth/challenges/${unknown.id}/inspect`,'POST',{approvalToken:unknown.approvalToken},first.sessionToken)).status,(await f.request('/api/me','GET',undefined,known.sessionToken)).status],[404,401,404,401]);
 });
 
@@ -126,11 +126,11 @@ await test('same-family approval works across users, is idempotent, and cannot r
  assert.deepEqual([approvals.first,approvals.second],[200,200]);
  for(let i=0;i<2;i++)assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken:member.pollToken})).json(),{status:'approved'});
 
- const memberCount=(assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM sessions WHERE challenge_id=?').bind(member.id).first('n'),(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[1,200]), ((await (await f.request('/api/family','GET',undefined,member.sessionToken)).json()) as Readonly<{members:ReadonlyArray<Identity['user']>}>).members.length);assert.deepEqual([
+ const memberCount=(assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM sessions WHERE challenge_id=?').bind(member.id).first('n'),(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[1,200]), ((await (await f.request('/api/family','GET',undefined,member.sessionToken)).json()) as Readonly<{members:ReadonlyArray<Identity['user']>}>).members.length);
+ void (assert.deepEqual([
   memberCount,
   (await f.request('/api/auth/logout','POST',{},member.sessionToken)).status,
- ],[2,200]);
- assert.deepEqual([(await f.request('/api/me','GET',undefined,member.sessionToken)).status,(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status],[401,409]);
+ ],[2,200]), assert.deepEqual([(await f.request('/api/me','GET',undefined,member.sessionToken)).status,(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status],[401,409]));
  // Even cleanup removing the expired row must not make a replay activate it again.
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('DELETE FROM sessions WHERE expires_at=0').run();
@@ -160,9 +160,10 @@ await test('family members share existing and new schedules while only creators 
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const created=await f.request('/api/schedules','POST',event,first.sessionToken);
  const saved=(assert.equal(created.status,201), await created.json() as Readonly<{event:Readonly<ScheduleRecord>}>);
- assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]);
- const shared=await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]};
- assert.deepEqual([
+
+ const shared=(assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]), await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]});
+
+ for(const token of (assert.deepEqual([
   shared.events.length,
   shared.events[0].id,
   shared.events[0].createdBy,
@@ -170,8 +171,7 @@ await test('family members share existing and new schedules while only creators 
   await (await f.request('/api/events','GET',undefined,member.sessionToken)).json(),
   await (await f.request('/api/schedules','GET',undefined,outsider.sessionToken)).json(),
   await (await f.request('/api/schedules?familyId='+owner.familyId,'GET',undefined,outsider.sessionToken)).json(),
- ],[1,saved.event.id,saved.event.createdBy,false,shared,{events:[]},{events:[]}]);
- for(const token of [member.sessionToken,outsider.sessionToken]){
+ ],[1,saved.event.id,saved.event.createdBy,false,shared,{events:[]},{events:[]}]), [member.sessionToken,outsider.sessionToken])){
   assert.deepEqual([(await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Stolen',canEdit:true},token)).status,(await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,token)).status],[404,404]);
  }
 
@@ -185,8 +185,8 @@ await test('family members share existing and new schedules while only creators 
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const memberCreated=(assert.equal(refreshedTitle,'Updated'), await f.request('/api/schedules','POST',{...event,title:'Member event'},member.sessionToken));
  const memberEvent=(assert.equal(memberCreated.status,201), ((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event);
- assert.deepEqual([memberEvent.canEdit,memberEvent.createdBy.username],[true,'family-member']);
- const combined=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
+
+ const combined=(assert.deepEqual([memberEvent.canEdit,memberEvent.createdBy.username],[true,'family-member']), await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]});
  return assert.deepEqual([
   combined.events.length,
   combined.events.find((e:Readonly<ScheduleRecord>)=>e.id===memberEvent.id)?.canEdit,
@@ -284,13 +284,13 @@ await test('legacy events are preserved and require an explicit operator ownersh
  await insertLegacy(unclaimed);const c:Readonly<LoginChallenge>=await unclaimed.challenge('first-user');
  // eslint-disable-next-line functional/no-expression-statements -- Apply the operator approval to this isolated test database.
  await unclaimed.bootstrap(c,'first-user',0);
- assert.deepEqual([
+
+ // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
+ const claimed=(assert.deepEqual([
   await (await unclaimed.request('/api/events','GET',undefined,c.sessionToken)).json(),
   await (await unclaimed.request('/api/schedules','GET',undefined,c.sessionToken)).json(),
   await unclaimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n'),
- ],[{events:[]},{events:[]},1]);
- // eslint-disable-next-line functional/prefer-immutable-types -- Retain this isolated test environment’s native Miniflare, D1, and HTTP operation handles.
- const claimed=await fixture(t);
+ ],[{events:[]},{events:[]},1]), await fixture(t));
  // eslint-disable-next-line functional/no-expression-statements -- Seed the isolated legacy database before exercising the operator ownership claim.
  await insertLegacy(claimed);const d:Readonly<LoginChallenge>=await claimed.challenge('first-user');
  // eslint-disable-next-line functional/no-expression-statements -- Apply the operator approval to this isolated test database.

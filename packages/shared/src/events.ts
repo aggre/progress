@@ -81,16 +81,16 @@ export function repeatLabel(e: Readonly<EventInput>): string {
 export function toLocal(instant: string, zone: string) { return Temporal.Instant.from(instant).toZonedDateTimeISO(zone).toPlainDateTime().toString({ smallestUnit: 'minute' }); }
 export function fromLocal(value: string, zone: string) { return Temporal.PlainDateTime.from(value).toZonedDateTime(zone, { disambiguation: 'compatible' }).toInstant().toString(); }
 export function starterEvents(zone: string): EventInput[] {
-  const now = Temporal.Now.zonedDateTimeISO(zone);
-  const day = now.startOfDay();
-  const endWeek = day.add({ days: (6 - day.dayOfWeek + 7) % 7 || 7 });
-  const examples = [
-    {title:'Next minute',emoji:'⏱️',color:palette[0],target:now.round({smallestUnit:'minute',roundingMode:'floor'}).add({minutes:1}),unit:'minute'},
-    {title:'A fresh day',emoji:'☀️',color:palette[2],target:day.add({days:1}),unit:'day'},
-    {title:'Hello, weekend',emoji:'🌿',color:palette[0],target:endWeek,unit:'week'},
-    {title:'A new month',emoji:'🌙',color:palette[1],target:day.with({day:1}).add({months:1}),unit:'month'},
-    {title:'The next chapter',emoji:'🎉',color:palette[3],target:day.with({month:1,day:1}).add({years:1}),unit:'year'},
-    {title:"St. Patrick’s Day",emoji:'☘️',color:palette[6],target:day.with({month:3,day:17}).add({years:now.month > 3 || (now.month === 3 && now.day >= 17) ? 1 : 0}),unit:'year'}
-  ];
-  return examples.map((e): Readonly<EventInput>=>({title:e.title,emoji:e.emoji,color:e.color,targetAt:e.target.toInstant().toString(),startAt:new Date(shift(e.target.toInstant().toString(),zone,e.unit as RepeatUnit,-1)).toISOString(),repeatUnit:e.unit as RepeatUnit,repeatEvery:1,timeZone:zone}));
+  const now = Temporal.Now.zonedDateTimeISO(zone).toString();
+  const day = Temporal.ZonedDateTime.from(now).startOfDay().toString();
+  const endWeek = Temporal.ZonedDateTime.from(day).add({ days: (6 - Temporal.ZonedDateTime.from(day).dayOfWeek + 7) % 7 || 7 }).toInstant().toString();
+  const examples: Readonly<Record<string, Readonly<{title:string; emoji:string; color:string; target:string; unit:RepeatUnit}>>> = {
+    minute: {title:'Next minute',emoji:'⏱️',color:palette[0],target:Temporal.ZonedDateTime.from(now).round({smallestUnit:'minute',roundingMode:'floor'}).add({minutes:1}).toInstant().toString(),unit:'minute'},
+    day: {title:'A fresh day',emoji:'☀️',color:palette[2],target:Temporal.ZonedDateTime.from(day).add({days:1}).toInstant().toString(),unit:'day'},
+    week: {title:'Hello, weekend',emoji:'🌿',color:palette[0],target:endWeek,unit:'week'},
+    month: {title:'A new month',emoji:'🌙',color:palette[1],target:Temporal.ZonedDateTime.from(day).with({day:1}).add({months:1}).toInstant().toString(),unit:'month'},
+    year: {title:'The next chapter',emoji:'🎉',color:palette[3],target:Temporal.ZonedDateTime.from(day).with({month:1,day:1}).add({years:1}).toInstant().toString(),unit:'year'},
+    saintPatricksDay: {title:"St. Patrick’s Day",emoji:'☘️',color:palette[6],target:Temporal.ZonedDateTime.from(day).with({month:3,day:17}).add({years:Temporal.ZonedDateTime.from(now).month > 3 || (Temporal.ZonedDateTime.from(now).month === 3 && Temporal.ZonedDateTime.from(now).day >= 17) ? 1 : 0}).toInstant().toString(),unit:'year'},
+  };
+  return Object.values(examples).map((e): Readonly<EventInput>=>({title:e.title,emoji:e.emoji,color:e.color,targetAt:e.target,startAt:new Date(shift(e.target,zone,e.unit,-1)).toISOString(),repeatUnit:e.unit,repeatEvery:1,timeZone:zone}));
 }

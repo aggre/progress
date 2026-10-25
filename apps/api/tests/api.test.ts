@@ -127,8 +127,10 @@ await test('same-family approval works across users, is idempotent, and cannot r
  assert.deepEqual([approvals.first,approvals.second],[200,200]);
  for(let i=0;i<2;i++)assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken:member.pollToken})).json(),{status:'approved'});
  assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM sessions WHERE challenge_id=?').bind(member.id).first('n'),(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[1,200]);
- const memberCount=((await (await f.request('/api/family','GET',undefined,member.sessionToken)).json()) as Readonly<{members:ReadonlyArray<Identity['user']>}>).members.length;assert.equal(memberCount,2);
- assert.equal((await f.request('/api/auth/logout','POST',{},member.sessionToken)).status,200);
+ const memberCount=((await (await f.request('/api/family','GET',undefined,member.sessionToken)).json()) as Readonly<{members:ReadonlyArray<Identity['user']>}>).members.length;assert.deepEqual([
+  memberCount,
+  (await f.request('/api/auth/logout','POST',{},member.sessionToken)).status,
+ ],[2,200]);
  assert.deepEqual([(await f.request('/api/me','GET',undefined,member.sessionToken)).status,(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status],[401,409]);
  // Even cleanup removing the expired row must not make a replay activate it again.
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
@@ -168,8 +170,8 @@ await test('family members share existing and new schedules while only creators 
   shared.events[0].canEdit,
   await (await f.request('/api/events','GET',undefined,member.sessionToken)).json(),
   await (await f.request('/api/schedules','GET',undefined,outsider.sessionToken)).json(),
- ],[1,saved.event.id,saved.event.createdBy,false,shared,{events:[]}]);
- assert.deepEqual(await (await f.request('/api/schedules?familyId='+owner.familyId,'GET',undefined,outsider.sessionToken)).json(),{events:[]});
+  await (await f.request('/api/schedules?familyId='+owner.familyId,'GET',undefined,outsider.sessionToken)).json(),
+ ],[1,saved.event.id,saved.event.createdBy,false,shared,{events:[]},{events:[]}]);
  for(const token of [member.sessionToken,outsider.sessionToken]){
   assert.deepEqual([(await f.request('/api/schedules/'+saved.event.id,'PUT',{...event,title:'Stolen',canEdit:true},token)).status,(await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,token)).status],[404,404]);
  }
@@ -190,12 +192,10 @@ await test('family members share existing and new schedules while only creators 
   combined.events.length,
   combined.events.find((e:Readonly<ScheduleRecord>)=>e.id===memberEvent.id)?.canEdit,
   (await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,first.sessionToken)).status,
- ],[2,false,404]);
- assert.deepEqual([
   (await f.request('/api/schedules/'+saved.event.id,'DELETE',undefined,first.sessionToken)).status,
   (await f.request('/api/schedules/'+memberEvent.id,'DELETE',undefined,member.sessionToken)).status,
   await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json(),
- ],[200,200,{events:[]}]);
+ ],[2,false,404,200,200,{events:[]}]);
 });
 
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register and await this integration test in the runner lifecycle, which supplies its mutable context and native completion Promise.
@@ -255,17 +255,17 @@ await test('origin checks, request bounds, malformed input and login rate limits
   foreign.status,
   foreign.headers.get('Access-Control-Allow-Origin'),
   (await f.request('/api/auth/challenges','POST',{username:'first-user'})).status,
- ],[403,null,201]);
- // Explicit raw request omits Origin; helper's default origin intentionally applies to UI requests.
- assert.equal((await f.mf.dispatchFetch('https://api.example/api/auth/challenges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'first-user'})})).status,403);
+  (await f.mf.dispatchFetch('https://api.example/api/auth/challenges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'first-user'})})).status,
+ ],[403,null,201,403]);
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const preflight=await f.request('/api/auth/challenges','OPTIONS');assert.deepEqual([
   preflight.status,
   preflight.headers.get('Access-Control-Allow-Origin'),
   preflight.headers.get('Access-Control-Allow-Origin')!=='*',
   (await f.request('/api/auth/challenges','POST',{username:'email@example.com'})).status,
- ],[204,origin,true,400]);
- assert.deepEqual([(await f.request('/api/auth/challenges','POST',{username:'a'.repeat(9000)})).status,(await f.request('/api/auth/challenges','POST',[])).status],[413,400]);
+  (await f.request('/api/auth/challenges','POST',{username:'a'.repeat(9000)})).status,
+  (await f.request('/api/auth/challenges','POST',[])).status,
+ ],[204,origin,true,400,413,400]);
  for(let i=0;i<5;i++)await f.request('/api/auth/challenges','POST',{username:'rate-test-'+i});
  assert.deepEqual([
   (await f.request('/api/auth/challenges','POST',{username:'rate-over-limit'})).status,

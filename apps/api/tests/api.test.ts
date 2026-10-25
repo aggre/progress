@@ -76,19 +76,16 @@ await test('operator bootstrap atomically creates one family/user and activates 
  const f=await fixture(t),c:Readonly<LoginChallenge>=await f.challenge('first-user');
  // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const token of [c.pollToken,c.approvalToken,c.sessionToken])assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
- await assert.rejects(f.bootstrap(c,'wrong-user'));
-
- const created:Readonly<{familyId:string;userId:string}>=(assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),await f.db.prepare('SELECT count(*) AS n FROM families').first('n')],[0,0]), await f.bootstrap(c,'first-user'));
+ const created:Readonly<{familyId:string;userId:string}>=(await assert.rejects(f.bootstrap(c,'wrong-user')), assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),await f.db.prepare('SELECT count(*) AS n FROM families').first('n')],[0,0]), await f.bootstrap(c,'first-user'));
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native HTTP response for status, header, or JSON-body assertions at this request boundary.
  const response=await f.request('/api/me','GET',undefined,c.sessionToken);
  const identity=(assert.equal(response.status,200), await response.json() as Readonly<{user:Readonly<Identity['user']>;family:Identity['family']}>);
  // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const token of (assert.deepEqual([identity.user.id,identity.family.id],[created.userId,created.familyId]), [c.pollToken,c.approvalToken]))assert.equal((await f.request('/api/me','GET',undefined,token)).status,401);
 
- await (assert.deepEqual([await (await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).json(),await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n')],[{status:'approved'},1]), assert.rejects(f.bootstrap(await f.challenge('second-user'),'second-user')));
 
  // D1 stores only token hashes, never the three capabilities returned to the browser.
- const row=(assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),1), await f.db.prepare('SELECT poll_hash,approval_hash,session_hash FROM login_challenges WHERE id=?').bind(c.id).first<Readonly<Record<string,string>>>());
+ const row=(await (assert.deepEqual([await (await f.request(`/api/auth/challenges/${c.id}/poll`,'POST',{pollToken:c.pollToken})).json(),await f.db.prepare('SELECT count(*) AS n FROM sessions').first('n')],[{status:'approved'},1]), assert.rejects(f.bootstrap(await f.challenge('second-user'),'second-user'))), assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),1), await f.db.prepare('SELECT poll_hash,approval_hash,session_hash FROM login_challenges WHERE id=?').bind(c.id).first<Readonly<Record<string,string>>>());
  return void ([{field:'poll_hash',token:c.pollToken},{field:'approval_hash',token:c.approvalToken},{field:'session_hash',token:c.sessionToken}] as const).every(entry => (assert.equal(row?.[entry.field],createHash('sha256').update(entry.token).digest('hex')), true));
 });
 
@@ -128,18 +125,17 @@ await test('same-family approval works across users, is idempotent, and cannot r
  const inspection=(assert.equal(inspected.status,200), await inspected.json() as Readonly<{username:string;verificationCode:string}>);
  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Each independent concurrent approval callback needs no input and returns its native HTTP completion Promise.
  const approvals:Readonly<Record<string,number>>=(assert.deepEqual([inspection.username,inspection.verificationCode],['family_member',member.verificationCode]), await Promise.all([1,2].map(async()=>(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status)).then(zipObj(['first','second'])));
- assert.deepEqual([approvals.first,approvals.second],[200,200]);
  // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
- for(const pollToken of [member.pollToken,member.pollToken])assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken})).json(),{status:'approved'});
+ for(const pollToken of (assert.deepEqual([approvals.first,approvals.second],[200,200]), [member.pollToken,member.pollToken]))assert.deepEqual(await (await f.request(`/api/auth/challenges/${member.id}/poll`,'POST',{pollToken})).json(),{status:'approved'});
 
  const memberCount=(assert.deepEqual([await f.db.prepare('SELECT count(*) AS n FROM sessions WHERE challenge_id=?').bind(member.id).first('n'),(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[1,200]), ((await (await f.request('/api/family','GET',undefined,member.sessionToken)).json()) as Readonly<{members:ReadonlyArray<Identity['user']>}>).members.length);
- void (assert.deepEqual([
-  memberCount,
-  (await f.request('/api/auth/logout','POST',{},member.sessionToken)).status,
- ],[2,200]), assert.deepEqual([(await f.request('/api/me','GET',undefined,member.sessionToken)).status,(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status],[401,409]));
+
  // Even cleanup removing the expired row must not make a replay activate it again.
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
- await f.db.prepare('DELETE FROM sessions WHERE expires_at=0').run();
+ await ((assert.deepEqual([
+  memberCount,
+  (await f.request('/api/auth/logout','POST',{},member.sessionToken)).status,
+ ],[2,200]), assert.deepEqual([(await f.request('/api/me','GET',undefined,member.sessionToken)).status,(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status],[401,409])), f.db.prepare('DELETE FROM sessions WHERE expires_at=0').run());
  return assert.deepEqual([(await f.request(`/api/auth/challenges/${member.id}/approve`,'POST',{approvalToken:member.approvalToken},first.sessionToken)).status,(await f.request('/api/me','GET',undefined,member.sessionToken)).status],[409,401]);
 });
 
@@ -233,9 +229,7 @@ await test('expired challenges and sessions cannot be approved or authenticated,
  const f=await fixture(t),expired:Readonly<LoginChallenge>=await f.challenge('expired-user');
  // eslint-disable-next-line functional/no-expression-statements -- Write test setup or expiry state to the isolated D1 database at this persistence boundary.
  await f.db.prepare('UPDATE login_challenges SET expires_at=unixepoch()-1 WHERE id=?').bind(expired.id).run();
- assert.deepEqual(await (await f.request(`/api/auth/challenges/${expired.id}/poll`,'POST',{pollToken:expired.pollToken})).json(),{status:'expired'});
- await assert.rejects(f.bootstrap(expired,'expired-user'));
- const a:Readonly<LoginChallenge>=(assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0), await f.challenge('candidate-alpha')),b:Readonly<LoginChallenge>=await f.challenge('candidate-bravo');
+ const a:Readonly<LoginChallenge>=(assert.deepEqual(await (await f.request(`/api/auth/challenges/${expired.id}/poll`,'POST',{pollToken:expired.pollToken})).json(),{status:'expired'}), await assert.rejects(f.bootstrap(expired,'expired-user')), assert.equal(await f.db.prepare('SELECT count(*) AS n FROM users').first('n'),0), await f.challenge('candidate-alpha')),b:Readonly<LoginChallenge>=await f.challenge('candidate-bravo');
  const statuses:Readonly<Record<string,'fulfilled'|'rejected'>>=await Promise.all([
   f.bootstrap(a,'candidate-alpha').then(always('fulfilled' as const),always('rejected' as const)),
   f.bootstrap(b,'candidate-bravo').then(always('fulfilled' as const),always('rejected' as const)),

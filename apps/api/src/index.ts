@@ -19,21 +19,20 @@ app.use('*',async(c,next)=>{
  c.header('Referrer-Policy','no-referrer');
  // eslint-disable-next-line functional/no-expression-statements -- Write the HTTP cache variation header for the request origin.
  c.header('Vary','Origin');
- if(origin&&origin!==c.env.FRONTEND_ORIGIN)return c.json({error:'Request origin not allowed.'},403);
- if(origin){
-  // eslint-disable-next-line functional/no-expression-statements -- Write the allowed origin to the HTTP response at the CORS boundary.
-  c.header('Access-Control-Allow-Origin',origin);
-  // eslint-disable-next-line functional/no-expression-statements -- Write the allowed request headers to the HTTP response at the CORS boundary.
-  c.header('Access-Control-Allow-Headers','Content-Type, Authorization');
-  // eslint-disable-next-line functional/no-expression-statements -- Write the allowed methods to the HTTP response at the CORS boundary.
-  c.header('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS');
-  // eslint-disable-next-line functional/no-expression-statements -- Write the preflight cache lifetime to the HTTP response at the CORS boundary.
-  c.header('Access-Control-Max-Age','600');
- }
- if(c.req.method==='OPTIONS')return c.body(null,204);
- if(!['GET','HEAD'].includes(c.req.method)&&origin!==c.env.FRONTEND_ORIGIN)return c.json({error:'Request origin required.'},403);
- // eslint-disable-next-line functional/no-expression-statements -- Dispatch the request to downstream Hono middleware after writing response headers.
- await next();
+ return origin&&origin!==c.env.FRONTEND_ORIGIN
+  ? c.json({error:'Request origin not allowed.'},403)
+  : (
+   origin&&(
+    c.header('Access-Control-Allow-Origin',origin),
+    c.header('Access-Control-Allow-Headers','Content-Type, Authorization'),
+    c.header('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS'),
+    c.header('Access-Control-Max-Age','600')
+   ),
+   c.req.method==='OPTIONS' ? c.body(null,204)
+    : !['GET','HEAD'].includes(c.req.method)&&origin!==c.env.FRONTEND_ORIGIN
+     ? c.json({error:'Request origin required.'},403)
+     : await next()
+  );
 });
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the request-size middleware whose rejection callback reads the native Hono context and returns an HTTP Response.
 app.use('/api/*',bodyLimit({maxSize:8192,onError:c=>c.json({error:'Request is too large.'},413)}));

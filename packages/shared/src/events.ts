@@ -1,14 +1,14 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { clamp } from 'ramda';
-export const units = ['none', 'minute', 'hour', 'day', 'week', 'month', 'year'] as const;
-export type RepeatUnit = typeof units[number];
+export const units = { none: 'none', minute: 'minute', hour: 'hour', day: 'day', week: 'week', month: 'month', year: 'year' } as const;
+export type RepeatUnit = typeof units[keyof typeof units];
 export interface ScheduleEvent {
   readonly id: string; readonly title: string; readonly emoji: string; readonly color: string; readonly startAt: string;
   readonly targetAt: string; readonly repeatUnit: RepeatUnit; readonly repeatEvery: number; readonly timeZone: string;
   readonly createdAt: string; readonly updatedAt: string;
 }
 export type EventInput = Readonly<Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>>;
-export const palette = ['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'];
+export const palette: Readonly<Record<number, string>> = Object.fromEntries(['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'].entries());
 function invalidEvent(message: string): never { throw new Error(message); }
 function instantNanoseconds(value: string): bigint {
   try { return Temporal.Instant.from(value).epochNanoseconds; }
@@ -26,7 +26,7 @@ export function validateEvent(raw: unknown): EventInput {
     ? invalidEvent('Choose an emoji (up to 16 characters).') : v.emoji;
   const color = typeof v.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(v.color)
     ? invalidEvent('Choose a valid six-digit color.') : v.color;
-  const repeatUnit = units.includes(v.repeatUnit as RepeatUnit) ? v.repeatUnit as RepeatUnit : invalidEvent('Choose a valid repeat period.');
+  const repeatUnit = Object.values(units).includes(v.repeatUnit as RepeatUnit) ? v.repeatUnit as RepeatUnit : invalidEvent('Choose a valid repeat period.');
   const repeatEvery = !Number.isInteger(v.repeatEvery) || Number(v.repeatEvery) < 1 || Number(v.repeatEvery) > 1000
     ? invalidEvent('Repeat every 1 to 1,000 periods.') : Number(v.repeatEvery);
   const timeZone = typeof v.timeZone !== 'string' || v.timeZone.length > 80 || !validTimeZone(v.timeZone) ? invalidEvent('Choose a valid time zone.') : v.timeZone;

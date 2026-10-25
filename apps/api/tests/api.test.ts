@@ -167,7 +167,7 @@ await test('family members share existing and new schedules while only creators 
  const created=await f.request('/api/schedules','POST',event,first.sessionToken);
  const saved=(assert.equal(created.status,201), await created.json() as Readonly<{event:Readonly<ScheduleRecord>}>);
 
- const shared=(assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]), await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as {events:ScheduleRecord[]});
+ const shared=(assert.deepEqual([saved.event.createdBy.username,saved.event.canEdit],['first-user',true]), await (await f.request('/api/schedules','GET',undefined,member.sessionToken)).json() as Readonly<{events:ReadonlyArray<Readonly<ScheduleRecord>>}>);
 
  // eslint-disable-next-line functional/no-loop-statements -- Await each HTTP request and its assertion before sending the next request to the isolated API environment.
  for(const token of (assert.deepEqual([
@@ -194,7 +194,7 @@ await test('family members share existing and new schedules while only creators 
  const memberCreated=(assert.equal(refreshedTitle,'Updated'), await f.request('/api/schedules','POST',{...event,title:'Member event'},member.sessionToken));
  const memberEvent=(assert.equal(memberCreated.status,201), ((await memberCreated.json()) as {event:Readonly<ScheduleRecord>}).event);
 
- const combined=(assert.deepEqual([memberEvent.canEdit,memberEvent.createdBy.username],[true,'family-member']), await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]});
+ const combined=(assert.deepEqual([memberEvent.canEdit,memberEvent.createdBy.username],[true,'family-member']), await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as Readonly<{events:ReadonlyArray<Readonly<ScheduleRecord>>}>);
  return assert.deepEqual([
   combined.events.length,
   combined.events.find((e:Readonly<ScheduleRecord>)=>e.id===memberEvent.id)?.canEdit,
@@ -218,7 +218,7 @@ await test('family schedule reads include existing events beyond the former 500-
   SELECT 'existing-'||n, CASE WHEN n<=500 THEN ? ELSE ? END, 'Existing '||n, '🌿', '#7ba989',
    '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', 'none', 1, 'UTC', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
   FROM numbers`).bind(owner.userId,member.id).run();
- const result=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as {events:ScheduleRecord[]};
+ const result=await (await f.request('/api/schedules','GET',undefined,first.sessionToken)).json() as Readonly<{events:ReadonlyArray<Readonly<ScheduleRecord>>}>;
  return assert.deepEqual([
   result.events.length,
   result.events.filter((e:Readonly<ScheduleRecord>)=>e.canEdit).length,

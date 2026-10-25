@@ -40,17 +40,17 @@
   let seeding = $state(false);
   const emojis: Readonly<Record<number, string>> = Object.fromEntries(['✨','🎯','🌿','☀️','🌙','🎉','🎂','✈️','📚','💻','🏃','☕','❤️','☘️','⏱️','🏖️'].entries());
   const timeZones: Readonly<Record<number, string>> = Object.fromEntries([...new Set(['Asia/Tokyo', Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC', ...Intl.supportedValuesOf('timeZone')])].entries());
-  const rows = $derived(events.map((e:Readonly<ScheduleRecord>): EventRow=>({...e, timing:cycle(e,now)})));
-  const completed = $derived(rows.filter(e=>e.timing.complete).length);
-  const active = $derived(rows.filter(e=>!e.timing.complete));
+  const rows: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(events.map((e:Readonly<ScheduleRecord>): EventRow=>({...e, timing:cycle(e,now)})).entries()));
+  const completed = $derived(Object.values(rows).filter(e=>e.timing.complete).length);
+  const active: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(Object.values(rows).filter(e=>!e.timing.complete).entries()));
   const repeatingCount = $derived(events.filter((e:Readonly<ScheduleRecord>)=>e.repeatUnit !== 'none').length);
-  const visible = $derived.by(()=>{
-    const list = rows.filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && e.title.toLowerCase().includes(query.toLowerCase()));
-    return sort === 'soonest' ? sortBy((event: EventRow)=>event.timing.end,list)
-      : sort === 'name' ? sortRows((a: EventRow,b: EventRow)=>a.title.localeCompare(b.title),list)
-      : list;
+  const visible: Readonly<Record<number, EventRow>> = $derived.by((): Readonly<Record<number, EventRow>>=>{
+    const list: Readonly<Record<number, EventRow>> = Object.fromEntries(Object.values(rows).filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && e.title.toLowerCase().includes(query.toLowerCase())).entries());
+    return Object.fromEntries((sort === 'soonest' ? sortBy((event: EventRow)=>event.timing.end,Object.values(list))
+      : sort === 'name' ? sortRows((a: EventRow,b: EventRow)=>a.title.localeCompare(b.title),Object.values(list))
+      : Object.values(list)).entries());
   });
-  const next = $derived(sortBy((event: EventRow)=>event.timing.end,active)[0]);
+  const next = $derived(sortBy((event: EventRow)=>event.timing.end,Object.values(active))[0]);
   const clockDate = $derived(new Intl.DateTimeFormat('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'Asia/Tokyo'}).format(now));
   const clockTime = $derived(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Tokyo'}).format(now));
   function dateLabel(value: number, timeZone: string) { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZone}).format(value); }
@@ -77,7 +77,7 @@
     if (event && !event.canEdit) return;
     editing=event; formError=''; saving=false;
     zone=event?.timeZone || 'Asia/Tokyo';
-    title=event?.title || ''; emoji=event?.emoji || '✨'; color=event?.color || palette[events.length % palette.length];
+    title=event?.title || ''; emoji=event?.emoji || '✨'; color=event?.color || palette[events.length % Object.values(palette).length];
     repeatUnit=event?.repeatUnit || 'none'; repeatEvery=event?.repeatEvery || 1;
     targetLocal=toLocal(event?.targetAt || new Date(Date.now()+86400000*7).toISOString(),zone);
     dialog.showModal(); await tick(); nameInput?.focus();
@@ -147,7 +147,7 @@
       <aside class="today-card" aria-label="Current date and time in Tokyo"><div class="today-top"><span>RIGHT HERE, RIGHT NOW</span><svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="4"/><path d="M11 1v2M11 19v2M1 11h2M19 11h2M4 4l1.5 1.5M16.5 16.5 18 18M4 18l1.5-1.5M16.5 5.5 18 4"/></svg></div><p class="today-date">{clockDate}</p><p class="today-time">{clockTime}<span>JST</span></p><div class="today-bottom"><span class="live-dot"></span> Another moment, well spent.</div><svg class="today-doodle" viewBox="0 0 100 100" aria-hidden="true"><path d="M60 13c35 15 25 53-10 46S20 20 45 28s23 57-14 56"/></svg></aside>
     </section>
 
-    <section class="overview" aria-label="Schedule overview"><div><span class="overview-icon">◷</span><span><strong>{active.length.toString().padStart(2,'0')}</strong> things to look forward to</span></div><div><span class="overview-icon">↻</span><span><strong>{repeatingCount.toString().padStart(2,'0')}</strong> on repeat</span></div><p><span class="live-dot"></span> Time keeps moving. So do you.</p></section>
+    <section class="overview" aria-label="Schedule overview"><div><span class="overview-icon">◷</span><span><strong>{Object.values(active).length.toString().padStart(2,'0')}</strong> things to look forward to</span></div><div><span class="overview-icon">↻</span><span><strong>{repeatingCount.toString().padStart(2,'0')}</strong> on repeat</span></div><p><span class="live-dot"></span> Time keeps moving. So do you.</p></section>
 
     <section class="events-section" aria-labelledby="events-heading">
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the browser Add event button. The editor callback returns its native dialog completion Promise. -->
@@ -159,8 +159,8 @@
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the empty-state browser button. The editor callback returns its native dialog completion Promise. -->
       {:else if !events.length && !error}<div class="empty-state"><span class="empty-emoji">🌱</span><h3>Something to look forward to.</h3><p>Your next adventure, a birthday, or simply a fresh day.<br/>Give your first countdown a little space.</p><button class="primary" onclick={()=>openEditor()}>＋ Create your first event</button><button class="text-button" disabled={seeding} onclick={seed}>{seeding ? 'Adding your countdowns…' : 'Or start with 6 everyday countdowns ↗'}</button></div>
   <!-- eslint-disable-next-line functional/functional-parameters -- Reset browser search and filter controls from the Show all events button. -->
-      {:else if !visible.length && !error}<div class="empty-state"><span class="empty-emoji">🔎</span><h3>No moments here, just yet.</h3><p>Try another search or filter, or add something new.</p><button class="text-button" onclick={()=>{query='';filter='all';showCompleted=true;}}>Show all events</button></div>
-      {:else}<div class="event-list">{#each visible as e (e.id)}
+      {:else if !Object.values(visible).length && !error}<div class="empty-state"><span class="empty-emoji">🔎</span><h3>No moments here, just yet.</h3><p>Try another search or filter, or add something new.</p><button class="text-button" onclick={()=>{query='';filter='all';showCompleted=true;}}>Show all events</button></div>
+      {:else}<div class="event-list">{#each Object.values(visible) as e (e.id)}
         <article class="event-card" class:is-complete={e.timing.complete} style={`--event-color:${e.color}`}>
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native editor for the schedule selected with its browser edit button. The editor callback returns its native dialog completion Promise. -->
           <div class="event-top"><div class="event-identity"><span class="event-emoji" aria-hidden="true">{e.emoji}</span><div><h3>{e.title}</h3><p class="event-meta"><span class="repeat-symbol" aria-hidden="true">{e.repeatUnit==='none' ? '◷' : '↻'}</span>{repeatLabel(e)}<span class="meta-dot">·</span><span class="event-target" title={`${dateLabel(e.timing.end,e.timeZone)} · ${e.timeZone}`}>{new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:e.timeZone}).format(e.timing.end)}</span></p><p class="event-creator">Added by {e.createdBy.username}</p></div></div><div class="event-actions"><div class="event-countdown"><strong>{e.timing.complete ? 'Arrived' : remainingText(e.timing.remaining)}</strong><span>{e.timing.complete ? 'You made it.' : e.timing.upcoming ? 'until it arrives · starts later' : 'until it arrives'}</span></div>{#if e.canEdit}<button class="edit-button" aria-label={`Edit ${e.title}`} title="Edit event" onclick={()=>openEditor(e)}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m12.5 4.5 3 3M3.5 16.5l3.7-.7L16 7a2.1 2.1 0 0 0-3-3L4.2 12.8l-.7 3.7Z"/></svg></button>{/if}</div></div>
@@ -168,7 +168,7 @@
           <div class="progress-caption"><span>{e.timing.complete ? 'A moment worth keeping.' : e.timing.progress < 1 ? 'A fresh start.' : e.timing.progress > 90 ? 'Almost there.' : 'A little closer.'}</span><span><strong>{e.timing.progress.toFixed(1)}%</strong> of the way</span></div>
         </article>
       {/each}</div>{/if}
-      <div class="list-footer"><label class="completed-toggle"><input type="checkbox" bind:checked={showCompleted}/><span>Show completed{completed ? ` (${completed})` : ''}</span></label><span>{visible.length} {visible.length===1 ? 'event' : 'events'}<span class="footer-separator">·</span>Updated every second</span></div>
+      <div class="list-footer"><label class="completed-toggle"><input type="checkbox" bind:checked={showCompleted}/><span>Show completed{completed ? ` (${completed})` : ''}</span></label><span>{Object.values(visible).length} {Object.values(visible).length===1 ? 'event' : 'events'}<span class="footer-separator">·</span>Updated every second</span></div>
     </section>
     <div class="closing-note"><span aria-hidden="true">✳</span><p>{next ? 'There’s always something to look forward to.' : 'A little space for the things that matter.'}</p><span class="note-line"></span></div>
   </main>
@@ -184,11 +184,11 @@
   <!-- eslint-disable-next-line functional/functional-parameters -- Update the browser event editor emoji from its picker button. -->
     <div class="emoji-picker" aria-label="Choose an emoji">{#each Object.values(emojis) as item (item)}<button type="button" class:selected={emoji===item} aria-label={`Use ${item}`} aria-pressed={emoji===item} onclick={()=>emoji=item}>{item}</button>{/each}</div>
     <label class="field-label">Target date & time<input type="datetime-local" bind:value={targetLocal} required min="1900-01-01T00:00" max="2200-12-31T23:59"/></label>
-    <div class="form-grid repeat-row"><label>Repeats<select aria-label="Repeats" bind:value={getRepeatChoice, setRepeatChoice}>{#each units as unit (unit)}<option value={unit}>{unit==='none' ? 'Does not repeat' : `Every ${unit}`}</option>{#if unit==='week'}<option value="two-weeks">Every 2 weeks</option>{/if}{/each}</select></label>{#if repeatUnit!=='none'}<label>Every<input type="number" bind:value={repeatEvery} min="1" max="1000" required aria-label="Repeat interval"/></label>{/if}</div>
+    <div class="form-grid repeat-row"><label>Repeats<select aria-label="Repeats" bind:value={getRepeatChoice, setRepeatChoice}>{#each Object.values(units) as unit (unit)}<option value={unit}>{unit==='none' ? 'Does not repeat' : `Every ${unit}`}</option>{#if unit==='week'}<option value="two-weeks">Every 2 weeks</option>{/if}{/each}</select></label>{#if repeatUnit!=='none'}<label>Every<input type="number" bind:value={repeatEvery} min="1" max="1000" required aria-label="Repeat interval"/></label>{/if}</div>
     {#if repeatUnit!=='none'}<p class="field-hint">The bar fills from the previous occurrence to the next, then starts again. Month-end dates stay anchored.</p>{/if}
     <label class="field-label">Time zone<select aria-label="Time zone" bind:value={zone}>{#each Object.values(timeZones) as tz (tz)}<option value={tz}>{tz.replaceAll('_',' ')}</option>{/each}</select></label><p class="field-hint">Dates use this time zone. Daylight-saving changes follow the local clock.</p>
 <!-- eslint-disable-next-line functional/functional-parameters -- Update the browser event editor color from its picker button. -->
-    <fieldset class="color-field"><legend>Make it your color</legend><div class="color-picker">{#each palette as swatch (swatch)}<button type="button" class:color-selected={color===swatch} style={`--swatch:${swatch}`} aria-label={`Use color ${swatch}`} aria-pressed={color===swatch} onclick={()=>color=swatch}>{color===swatch ? '✓' : ''}</button>{/each}<label class="custom-color" title="Choose any color"><input type="color" bind:value={color} aria-label="Custom bar color"/><span>＋</span></label></div></fieldset>
+    <fieldset class="color-field"><legend>Make it your color</legend><div class="color-picker">{#each Object.values(palette) as swatch (swatch)}<button type="button" class:color-selected={color===swatch} style={`--swatch:${swatch}`} aria-label={`Use color ${swatch}`} aria-pressed={color===swatch} onclick={()=>color=swatch}>{color===swatch ? '✓' : ''}</button>{/each}<label class="custom-color" title="Choose any color"><input type="color" bind:value={color} aria-label="Custom bar color"/><span>＋</span></label></div></fieldset>
     <div class="mini-preview"><span>{emoji} {title || 'Your next little moment'}</span><div style={`background:${color}`}></div></div>
     {#if formError}<p class="form-error" role="alert">{formError}</p>{/if}
 <!-- eslint-disable-next-line functional/functional-parameters -- Browser dialog buttons open deletion confirmation or cancel editing. -->

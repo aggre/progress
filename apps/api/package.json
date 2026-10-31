@@ -12,6 +12,7 @@
     "precheck": "wrangler types worker-configuration.d.ts"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
     "@little/shared": "2.0.0",
     "hono": "latest",
     "ramda": "^0.32.0"

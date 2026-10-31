@@ -6,6 +6,7 @@
   import { api, ApiError, BASE_PATH, STORAGE_NAMESPACE, SESSION_EXPIRED_EVENT, clearSession, getSession, saveSession, sessionStorageKey } from '../lib/api';
   import Dashboard from './Dashboard.svelte';
   import FamilyPanel from './FamilyPanel.svelte';
+  import { unsubscribeBrowserPush } from '../lib/browser-notifications';
 
   type SavedChallenge = Readonly<LoginChallenge & { username: string }>;
   type ApprovalIntent = Readonly<{ id: string; approvalToken: string }>;
@@ -186,10 +187,17 @@
   function leaveApproval() { approval = null; approvalDetails = null; approvalError = ''; approved = false; storageRemove(approvalKey); }
   // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Revoke the current API session and clear browser storage and timers. This browser API operation returns its native completion Promise.
   async function logout() {
+    const token = getSession();
+    // eslint-disable-next-line functional/prefer-immutable-types -- Start browser cleanup without delaying server session revocation.
+    const pushCleanup = unsubscribeBrowserPush(BASE_PATH).catch(() => false);
+    let serverSignedOut = false;
     // eslint-disable-next-line functional/no-try-statements -- Complete local browser sign-out even when the session revocation API fails.
-    try { await api('/api/auth/logout', 'POST', {}); }
+    try { await api('/api/auth/logout', 'POST', {}, token); serverSignedOut = true; }
     catch { /* Local sign-out still removes this device's access. */ }
-    clearSession(); identity = null; familyOpen = false; clearPending(); notice = 'You’re signed out.';
+    const pushStopped = await pushCleanup;
+    // eslint-disable-next-line functional/no-conditional-statements -- Do not clear a newer sign-in that another tab completed while logout was pending.
+    if (getSession() !== token) return;
+    clearSession(); identity = null; familyOpen = false; clearPending(); notice = pushStopped || serverSignedOut ? 'You’re signed out.' : 'You’re signed out here. Unable to stop push notifications; block this site’s notifications in your browser settings.';
   }
   onMount(() => {
     readApprovalIntent();

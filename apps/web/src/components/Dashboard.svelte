@@ -5,6 +5,7 @@
 
   import type { Identity, ScheduleRecord } from '@little/shared/api';
   import { api, BASE_PATH } from '../lib/api';
+  import NotificationSettings from './NotificationSettings.svelte';
   type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
 
@@ -154,6 +155,8 @@
     </section>
 
     <section class="overview" aria-label="Schedule overview"><div><span class="overview-icon">◷</span><span><strong>{Object.values(active).length.toString().padStart(2,'0')}</strong> things to look forward to</span></div><div><span class="overview-icon">↻</span><span><strong>{repeatingCount.toString().padStart(2,'0')}</strong> on repeat</span></div><p><span class="live-dot"></span> Time keeps moving. So do you.</p></section>
+
+    {#key identity.user.id}<NotificationSettings userId={identity.user.id} />{/key}
 
     <section class="events-section" aria-labelledby="events-heading">
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the browser Add event button. The editor callback returns its native dialog completion Promise. -->

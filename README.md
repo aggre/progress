@@ -68,6 +68,7 @@ configuration, Web overrides, and Ramda usage.
 
 - Frontend: GitHub Actions builds the web workspace on changes to `main`, then deploys to GitHub Pages. The committed API origin is `https://little-by-little-api.aggre-progress.workers.dev`; the optional `PUBLIC_API_BASE_URL` repository variable overrides it. Invalid production configuration fails the workflow.
 - API: apply the D1 migrations, then run `npm run deploy:api` with an authenticated Cloudflare CLI. The Pages workflow does not hold a Cloudflare credential or deploy the API.
+- Web Push: configure the VAPID keys and deploy the API, migration, and frontend as described in [Web Push setup](docs/operations.md#web-push-setup). Adding the code alone does not enable production delivery.
 - Accounts: leave the production user database empty until the owner starts a login attempt and an operator approves that specific request.
 
 The intended project URL is `https://aggre.github.io/progress/`. GitHub Pages serves public HTML and JavaScript; schedule data and family operations are protected by the API and are never embedded in the static build. No private source ZIP is included in the public Pages artifact.
@@ -80,3 +81,7 @@ The intended project URL is `https://aggre.github.io/progress/`. GitHub Pages se
 - Month-end and leap-day dates remain anchored: January 31 becomes February 28, then March 31; February 29 returns in leap years.
 - Events are shared with everyone in the creator's family. Only the creator can edit or delete an event. Family membership also authorizes login approval and member management.
 - Progress updates run in the browser. Only login approval polls the API; countdown ticks do not read D1.
+- Web Push reminders are opt-in from the dashboard, with a default reminder 10 minutes before each family event (choose 1, 5, 10, 15, 30, or 60 minutes). **Enable notifications** registers this browser with the API; **Test notification** sends a push from the server to check the delivery path.
+- A Worker checks upcoming events every minute using each event's time zone and recurrence. Delivery receipts and notification tags suppress repeated reminders across reloads and open tabs. Search and filters do not affect reminders; no open-tab notification timer is needed.
+- Notifications can arrive after the app tab closes. HTTPS (or localhost), a browser with Push API support, browser permission, and device notification settings are required. Device sleep, offline operation, browser shutdown, or force-stop can delay or prevent delivery; Web Push is not an exact alarm. On iPhone and iPad, use a supported version of iOS/iPadOS and add the app to the Home Screen before enabling notifications.
+- Subscriptions belong to the current signed-in browser session. Turning notifications off or signing out stops future sends; session expiry also stops sends. Sign in again and enable notifications to resume. A push already accepted by the browser's push service may still be delivered.

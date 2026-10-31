@@ -3,6 +3,8 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { auth } from './auth';
 import { events } from './events';
+import { push } from './push';
+import { runPushReminders } from './push-scheduler';
 import { jsonObject,memberUsername,requireAuth,throttle } from './security';
 import type { AppEnv,ApiBindings } from './types';
 // eslint-disable-next-line functional/no-throw-statements -- Propagate unexpected D1 failures to Hono’s request error boundary without changing the original rejection.
@@ -41,6 +43,8 @@ app.use('/api/*',bodyLimit({maxSize:8192,onError:c=>c.json({error:'Request is to
 app.get('/health',c=>c.json({ok:true}));
 // eslint-disable-next-line functional/no-expression-statements -- Mount authentication HTTP endpoints on the Hono router.
 app.route('/api/auth',auth);
+// eslint-disable-next-line functional/no-expression-statements -- Mount authenticated Web Push subscription and test endpoints.
+app.route('/api/push',push);
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the identity endpoint which reads the native Hono context and returns an HTTP Response.
 app.get('/api/me',requireAuth,c=>c.json(c.get('identity')));
 // eslint-disable-next-line functional/no-expression-statements, functional/prefer-immutable-types -- Register the family listing endpoint using the native Hono context and D1/response completion Promise.
@@ -83,7 +87,9 @@ export {app};
 export default {
  fetch:app.fetch,
  // eslint-disable-next-line functional/prefer-immutable-types -- The Worker scheduler supplies its native controller and D1 environment; cleanup returns a completion Promise.
- async scheduled(_event:ScheduledController,env:ApiBindings){
+ async scheduled(event:ScheduledController,env:ApiBindings){
+  // eslint-disable-next-line functional/no-conditional-statements -- Reminder ticks and daily authentication cleanup have separate cron schedules.
+  if(event.cron==='* * * * *') return runPushReminders(env,event.scheduledTime);
   // Remove old capabilities without retaining usernames, tokens, or IP addresses in logs.
   // eslint-disable-next-line functional/no-expression-statements -- Delete expired authentication capabilities and rate limits at the scheduled D1 persistence boundary.
   await env.DB.batch([

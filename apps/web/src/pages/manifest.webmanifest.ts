@@ -12,7 +12,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   start_url: base,
   scope: base,
   display: 'standalone',
-  background_color: '#f8f8f2',
-  theme_color: '#f8f8f2',
+  background_color: '#fffdfa',
+  theme_color: '#fffdfa',
   icons: [{ src: `${base}favicon.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
 }), { headers: { 'Content-Type': 'application/manifest+json' } });

@@ -1,0 +1,65 @@
+/* Nunito's Latin subset is bundled so the UI doesn't depend on a font CDN. */
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('../assets/fonts/nunito-latin-variable.woff2') format('woff2');
+}
+
+/* Pastels sampled from the reference image; darker inks keep small text legible. */
+:root {
+  color-scheme: light;
+  --font-rounded: 'Nunito', ui-rounded, 'Arial Rounded MT Bold', sans-serif;
+  --pastel-pink: #f4b8b1;
+  --pastel-peach: #f6c7af;
+  --pastel-apricot: #f8daae;
+  --pastel-butter: #f9e4af;
+  --pastel-lemon: #fefbc0;
+  --pastel-lime: #f2f6bd;
+  --pastel-green: #d2e7b9;
+  --canvas: #fffdfa;
+  --surface: #ffffff;
+  --surface-soft: #faf6f0;
+  --surface-pink: #fff0ed;
+  --surface-green: #f0f6e8;
+  --ink: #493f3c;
+  --text-secondary: #665c55;
+  --text-muted: #766c63;
+  --rose-ink: #a15358;
+  --green-ink: #4e693e;
+  --border: #e8dfd5;
+  --border-strong: #b8a99c;
+  --primary: var(--pastel-pink);
+  --primary-hover: #efa69e;
+  --primary-border: #dda29b;
+  --focus: #a15358;
+  --danger: #9a414c;
+  --danger-soft: #fff0ed;
+  --danger-border: #e5b5b4;
+  --backdrop: #493f3c55;
+  --shadow: #7557471a;
+  --shadow-soft: #7557470c;
+  --rainbow: linear-gradient(100deg, var(--pastel-pink), var(--pastel-peach), var(--pastel-apricot), var(--pastel-lemon), var(--pastel-lime), var(--pastel-green));
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--canvas);
+  background-image: radial-gradient(#c6b8aa40 .8px, transparent .8px);
+  background-size: 28px 28px;
+  color: var(--ink);
+  font-family: var(--font-rounded);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; }
+button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; color: inherit; }
+button:disabled { cursor: wait; opacity: .55; }
+a { color: inherit; }
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+::selection { background: var(--pastel-peach); color: var(--ink); }

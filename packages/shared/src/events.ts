@@ -8,7 +8,8 @@ export interface ScheduleEvent {
   readonly createdAt: string; readonly updatedAt: string;
 }
 export type EventInput = Readonly<Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>>;
-export const palette: Readonly<Record<number, string>> = Object.fromEntries(['#7ba989', '#b39bd5', '#dfad62', '#df947e', '#81aabb', '#c0a05c', '#82a8a0', '#b88cac'].entries());
+// Keep the preset swatches in the reference image's pink-to-green order.
+export const palette: Readonly<Record<number, string>> = Object.fromEntries(['#f4b8b1', '#f6c7af', '#f8daae', '#f9e4af', '#fefbc0', '#f2f6bd', '#d2e7b9'].entries());
 function invalidEvent(message: string): Readonly<{error: string}> { return {error: message}; }
 const instantNanoseconds = tryCatch(
   (value: string): bigint | null => Temporal.Instant.from(value).epochNanoseconds,

@@ -6,6 +6,7 @@
   import type { Identity, ScheduleRecord } from '@little/shared/api';
   import { api, BASE_PATH } from '../lib/api';
   import NotificationSettings from './NotificationSettings.svelte';
+  import InstallApp from './InstallApp.svelte';
   type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
 
@@ -149,6 +150,7 @@
   </header>
 
   <main>
+    <InstallApp />
     <section class="intro" aria-labelledby="page-title">
       <div class="intro-copy"><p class="eyebrow"><span></span> A LITTLE PERSPECTIVE</p><h1 id="page-title">Good things<br/>take <span>time.</span><svg class="title-spark" viewBox="0 0 60 60" fill="none" aria-hidden="true"><path d="M30 5v14M30 41v14M5 30h14M41 30h14M12 12l10 10M39 39l9 9M12 48l10-10M39 22l9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></h1><p class="intro-description">Big plans. Small moments. A little closer, every second.</p></div>
       <aside class="today-card" aria-label="Current date and time in Tokyo"><div class="today-top"><span>RIGHT HERE, RIGHT NOW</span><svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="4"/><path d="M11 1v2M11 19v2M1 11h2M19 11h2M4 4l1.5 1.5M16.5 16.5 18 18M4 18l1.5-1.5M16.5 5.5 18 4"/></svg></div><p class="today-date">{clockDate}</p><p class="today-time">{clockTime}<span>JST</span></p><div class="today-bottom"><span class="live-dot"></span> Another moment, well spent.</div><svg class="today-doodle" viewBox="0 0 100 100" aria-hidden="true"><path d="M60 13c35 15 25 53-10 46S20 20 45 28s23 57-14 56"/></svg></aside>

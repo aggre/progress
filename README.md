@@ -27,6 +27,12 @@ An existing signed-in device can approve another device for the same user. A QR 
 
 See [architecture and authentication](docs/architecture.md) for the protocol and [operations](docs/operations.md) for first-user approval and deployment.
 
+## Add to Home Screen
+
+**Add to Home Screen** is available before and after sign-in in supported browsers. It opens the browser's installation prompt when available, or shows the appropriate browser-menu instructions. On iPhone and iPad, use Safari's **Share → Add to Home Screen**, then open the new icon to sign in and enable notifications.
+
+The control hides when running as an installed app and after the browser reports a completed installation. Ordinary browser tabs cannot reliably detect all existing installations, so they may still show installation guidance. No permanent local installation flag is stored, allowing the control to return after uninstalling.
+
 ## Local development
 
 Requires Node.js 24 or later.

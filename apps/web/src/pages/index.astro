@@ -9,6 +9,7 @@ const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL :
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
     <link rel="manifest" href={`${base}manifest.webmanifest`} />
+    <script is:inline src={`${base}install-prompt.js`}></script>
     <meta name="description" content="Little by little. Sign in with approval from your family." />
     <meta name="theme-color" content="#f8f8f2" />
     <meta name="referrer" content="no-referrer" />

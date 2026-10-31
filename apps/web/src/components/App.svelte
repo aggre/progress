@@ -5,6 +5,7 @@
   import type { Identity, LoginChallenge, LoginStatus, PendingApproval } from '@little/shared/api';
   import { api, ApiError, BASE_PATH, STORAGE_NAMESPACE, SESSION_EXPIRED_EVENT, clearSession, getSession, saveSession, sessionStorageKey } from '../lib/api';
   import Dashboard from './Dashboard.svelte';
+  import InstallApp from './InstallApp.svelte';
   import FamilyPanel from './FamilyPanel.svelte';
   import { unsubscribeBrowserPush } from '../lib/browser-notifications';
 
@@ -236,6 +237,7 @@
 {:else}
   <div class="auth-shell">
     <header class="auth-topbar"><a class="brand" href={BASE_PATH}><span class="brand-symbol" aria-hidden="true">⌛</span><span>little by little<span class="brand-dot">.</span></span></a><span class="quiet-label">AT YOUR OWN PACE</span></header>
+    <InstallApp />
     <main class="auth-main">
       {#if identity && approval}
         <section class="auth-card" aria-labelledby="approval-heading">

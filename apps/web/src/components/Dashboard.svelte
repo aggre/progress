@@ -5,8 +5,7 @@
 
   import type { Identity, ScheduleRecord } from '@little/shared/api';
   import { api, BASE_PATH } from '../lib/api';
-  import NotificationSettings from './NotificationSettings.svelte';
-  import InstallApp from './InstallApp.svelte';
+  import SettingsPanel from './SettingsPanel.svelte';
   type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
 
@@ -19,6 +18,7 @@
   let query = $state('');
   let sort = $state('custom');
   let showCompleted = $state(false);
+  let settingsOpen = $state(false);
   // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native event editor dialog at the DOM boundary.
   let dialog: HTMLDialogElement;
   // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native input used to focus the event editor.
@@ -138,7 +138,7 @@
     const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),events},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     // eslint-disable-next-line functional/prefer-immutable-types -- The native anchor must be configured and clicked to download the export.
-    const a=document.createElement('a');a.href=url;a.download='little-by-little-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Your events have been exported.');
+    const a=document.createElement('a');a.href=url;a.download='little-by-little-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function confirmDelete(e: Readonly<ScheduleRecord>) { deleteEvent=e;formError='';deleteDialog.showModal(); }
 </script>
@@ -146,23 +146,17 @@
 <div class="app-shell">
   <header class="topbar">
     <a class="brand" href={BASE_PATH} aria-label="Little by little home"><span class="brand-mark" aria-hidden="true">⌛</span><span>little by little<span class="brand-dot">.</span></span></a>
-    <div class="header-right"><span class="private-label"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3.5" y="7" width="9" height="7" rx="2"/><path d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7"/></svg>Your family space</span><button class="family-button" onclick={onfamily}>Family</button><span class="avatar" title={identity.user.username}>{identity.user.username.slice(0, 1).toUpperCase()}</span></div>
+    <nav class="header-right" aria-label="Your space">
+      <button class="family-button" onclick={onfamily}>Family</button>
+      <!-- eslint-disable-next-line functional/functional-parameters -- Open settings without leaving the current event list or changing its filters. -->
+      <button class="settings-button" aria-label="Settings" aria-haspopup="dialog" onclick={() => { settingsOpen = true; }}><svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="5" r="2"/><circle cx="13" cy="10" r="2"/><circle cx="7" cy="15" r="2"/></svg><span>Settings</span></button>
+    </nav>
   </header>
 
   <main>
-    <InstallApp />
-    <section class="intro" aria-labelledby="page-title">
-      <div class="intro-copy"><p class="eyebrow"><span></span> A LITTLE PERSPECTIVE</p><h1 id="page-title">Good things<br/>take <span>time.</span><svg class="title-spark" viewBox="0 0 60 60" fill="none" aria-hidden="true"><path d="M30 5v14M30 41v14M5 30h14M41 30h14M12 12l10 10M39 39l9 9M12 48l10-10M39 22l9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></h1><p class="intro-description">Big plans. Small moments. A little closer, every second.</p></div>
-      <aside class="today-card" aria-label="Current date and time in Tokyo"><div class="today-top"><span>RIGHT HERE, RIGHT NOW</span><svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="4"/><path d="M11 1v2M11 19v2M1 11h2M19 11h2M4 4l1.5 1.5M16.5 16.5 18 18M4 18l1.5-1.5M16.5 5.5 18 4"/></svg></div><p class="today-date">{clockDate}</p><p class="today-time">{clockTime}<span>JST</span></p><div class="today-bottom"><span class="live-dot"></span> Another moment, well spent.</div><svg class="today-doodle" viewBox="0 0 100 100" aria-hidden="true"><path d="M60 13c35 15 25 53-10 46S20 20 45 28s23 57-14 56"/></svg></aside>
-    </section>
-
-    <section class="overview" aria-label="Schedule overview"><div><span class="overview-icon">◷</span><span><strong>{Object.values(active).length.toString().padStart(2,'0')}</strong> things to look forward to</span></div><div><span class="overview-icon">↻</span><span><strong>{repeatingCount.toString().padStart(2,'0')}</strong> on repeat</span></div><p><span class="live-dot"></span> Time keeps moving. So do you.</p></section>
-
-    {#key identity.user.id}<NotificationSettings userId={identity.user.id} />{/key}
-
     <section class="events-section" aria-labelledby="events-heading">
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the browser Add event button. The editor callback returns its native dialog completion Promise. -->
-      <div class="section-heading"><div><h2 id="events-heading">Your time, in progress<span class="heading-dot">.</span></h2><p>Shared moments for your family.</p></div><button class="primary add-button" onclick={()=>openEditor()}><span aria-hidden="true">＋</span> Add event</button></div>
+      <div class="section-heading"><div><h1 id="events-heading">Your time,<br class="mobile-break"/> in progress<span class="heading-dot">.</span></h1><p class="event-summary" aria-label="Schedule overview">{#if loading}Your family’s shared moments{:else}<span><strong>{Object.values(active).length}</strong> upcoming</span><span class="summary-dot" aria-hidden="true">·</span><span><strong>{repeatingCount}</strong> repeating</span>{/if}</p></div><button class="primary add-button" onclick={()=>openEditor()}><span aria-hidden="true">＋</span> Add event</button></div>
   <!-- eslint-disable-next-line functional/functional-parameters -- Browser filter buttons update the currently selected event-list tab. -->
       <div class="toolbar"><div class="tabs" aria-label="Filter events"><button class:chosen={filter==='all'} onclick={()=>filter='all'} aria-pressed={filter==='all'}>All events <span>{events.length}</span></button><button class:chosen={filter==='repeating'} onclick={()=>filter='repeating'} aria-pressed={filter==='repeating'}>Repeating</button><button class:chosen={filter==='once'} onclick={()=>filter='once'} aria-pressed={filter==='once'}>One-time</button></div><div class="list-tools"><label class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input aria-label="Search events" placeholder="Find an event" bind:value={query}/></label><select aria-label="Sort events" bind:value={sort}><option value="custom">Date added</option><option value="soonest">Soonest first</option><option value="name">Name A–Z</option></select></div></div>
       {#if error}<div class="error-banner" role="alert"><span>{error}</span><button onclick={load}>Try again</button></div>{/if}
@@ -183,8 +177,13 @@
     </section>
     <div class="closing-note"><span aria-hidden="true">✳</span><p>{next ? 'There’s always something to look forward to.' : 'A little space for the things that matter.'}</p><span class="note-line"></span></div>
   </main>
-  <footer class="site-footer"><span>little by little<span class="brand-dot">.</span><span class="footer-separator">/</span>At your own pace.</span><div><button onclick={exportEvents} disabled={!events.length}>Export events ↗</button><button onclick={onlogout}>Sign out ↗</button></div></footer>
+  <footer class="site-footer"><span>little by little<span class="brand-dot">.</span></span><span>Good things take time.</span></footer>
 </div>
+
+{#if settingsOpen}
+  <!-- eslint-disable-next-line functional/functional-parameters -- Dismiss the settings dialog while preserving the dashboard's current state. -->
+  <SettingsPanel {identity} eventCount={events.length} {clockDate} {clockTime} onclose={() => { settingsOpen = false; }} onexport={exportEvents} {onlogout} />
+{/if}
 
 <!-- eslint-disable-next-line functional/prefer-immutable-types -- Read the native cancel Event to prevent closing the browser editor while saving. -->
 <dialog bind:this={dialog} class="event-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}>
@@ -211,56 +210,45 @@
 {#if toast}<div class="toast" role="status"><span>✓</span>{toast}</div>{/if}
 
 <style>
+  h1{font-size:34px;line-height:1.15;font-weight:800;letter-spacing:-1px;margin:0}
+  .mobile-break{display:none}
+  .event-summary{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+  .event-summary strong{color:var(--green-ink);font-weight:800}
+  .summary-dot{color:var(--border-strong)}
+  .settings-button{display:flex;align-items:center;justify-content:center;gap:8px;min-width:40px;min-height:40px;border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:9px 13px;font-size:12px;font-weight:700}
+  .settings-button:hover{background:var(--surface-pink)}
+  .settings-button svg{flex-shrink:0}
+  .settings-button circle{fill:var(--surface);stroke:currentColor;stroke-width:1.4}
+
   .app-shell{max-width:1280px;margin:auto;padding:0 64px}
-  .topbar{height:104px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+  .topbar{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;background:var(--canvas)}
   .brand{text-decoration:none;display:flex;align-items:center;gap:11px;font-weight:700;font-size:22px;letter-spacing:-.8px}
   .brand-mark{width:34px;height:38px;display:grid;place-items:center;background:var(--rainbow);border-radius:13px;font-size:21px;transform:rotate(-7deg)}
   .brand-dot{color:var(--rose-ink)}
-  .header-right{display:flex;align-items:center;gap:23px}
-  .private-label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-muted)}
-  .private-label svg{width:15px;stroke:currentColor;stroke-width:1.3}
-  .avatar{border:1px solid var(--border);background:var(--pastel-peach);border-radius:50%;width:33px;height:33px;display:grid;place-items:center;font-size:12px;border-color:var(--pastel-peach)}
-  .intro{display:flex;align-items:center;justify-content:space-between;padding:62px 0 46px;gap:30px}
+  .header-right{display:flex;align-items:center;gap:10px}
+
   .eyebrow{font-size:10px;letter-spacing:2px;font-weight:600;color:var(--text-muted);display:flex;align-items:center;gap:8px;margin:0 0 20px}
-  .eyebrow>span{width:5px;height:5px;border-radius:50%;background:var(--rose-ink)}
-  h1{font-family:var(--font-rounded);font-size:72px;line-height:1.06;font-weight:800;letter-spacing:-1.8px;margin:0;position:relative;display:inline-block}
-  h1>span{font-style:normal;color:var(--rose-ink);background:linear-gradient(transparent 74%,var(--pastel-lemon) 74%)}
-  .title-spark{width:45px;height:45px;color:var(--pastel-peach);position:absolute;right:-72px;bottom:12px;transform:rotate(12deg)}
-  .intro-description{font-size:14px;color:var(--text-muted);margin:24px 0 0;line-height:1.7}
-  .today-card{width:314px;flex-shrink:0;background:linear-gradient(135deg,var(--pastel-lemon),var(--pastel-butter));border:1px solid var(--border);border-radius:24px;position:relative;overflow:hidden;padding:25px 25px 19px;transform:rotate(2deg);border-color:var(--pastel-butter);box-shadow:0 8px 25px var(--shadow-soft)}
-  .today-top{display:flex;align-items:center;justify-content:space-between;color:var(--text-muted);font-size:8px;letter-spacing:1.6px}
-  .today-top svg{width:22px;stroke:var(--text-muted);stroke-width:1.3}
-  .today-date{font-family:var(--font-rounded);font-size:19px;position:relative;margin:24px 0 10px;z-index:1;font-weight:700}
-  .today-time{font-size:35px;letter-spacing:-1px;margin:0;font-variant-numeric:tabular-nums;position:relative;z-index:1;font-weight:800}
-  .today-time>span{font-size:9px;letter-spacing:.6px;margin-left:9px;color:var(--text-muted)}
-  .today-bottom{border-top:1px solid var(--border);margin-top:24px;padding-top:14px;font-size:10px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;border-color:color-mix(in srgb,var(--ink) 15%,transparent)}
-  .live-dot{background:var(--green-ink);width:5px;height:5px;display:inline-block;border-radius:50%;flex-shrink:0}
-  .today-doodle{position:absolute;width:113px;height:113px;right:-10px;top:50px;opacity:.22;stroke:var(--rose-ink);stroke-width:1.2;fill:none}
-  .overview{border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:32px;padding:19px 18px;font-size:11px;color:var(--green-ink);background:var(--surface-green);border:1px solid var(--pastel-green);border-radius:16px}
-  .overview>div{display:flex;align-items:center;gap:9px}
-  .overview strong{color:var(--ink);font-size:13px;margin-right:5px;font-weight:700}
-  .overview-icon{font-size:19px;color:var(--green-ink)}
-  .overview>p{margin:0 0 0 auto;font-family:var(--font-rounded);font-style:normal;font-size:12px;display:flex;align-items:center;gap:8px}
-  .events-section{padding-top:48px}
-  .section-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:31px}
+
+  .events-section{padding-top:32px}
+  .section-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:22px}
   h2{font-size:24px;font-weight:800;letter-spacing:-.7px;margin:0}
   .heading-dot{color:var(--rose-ink)}
-  .section-heading p{color:var(--text-muted);font-size:12px;margin:11px 0 0}
+  .section-heading p{color:var(--text-muted);font-size:12px;margin:9px 0 0}
   .primary{border:1px solid var(--primary-border);border-radius:14px;background:var(--primary);color:var(--ink);padding:12px 18px;font-size:12px;font-weight:800;transition:background .2s}
   .primary:hover{background:var(--primary-hover)}
-  .add-button{display:flex;align-items:center;gap:9px}
+  .add-button{display:flex;align-items:center;gap:9px;min-height:44px;flex-shrink:0;white-space:nowrap}
   .add-button>span{font-size:20px;line-height:.7;font-weight:700}
-  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:19px}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
   .tabs{display:flex;align-items:center;gap:4px;background:var(--surface-pink);padding:4px;border-radius:14px}
-  .tabs button{background:none;border:0;padding:8px 12px;font-size:11px;white-space:nowrap;color:var(--text-muted);border-radius:10px;font-weight:700}
+  .tabs button{background:none;border:0;padding:8px 12px;font-size:12px;white-space:nowrap;color:var(--text-muted);border-radius:10px;font-weight:700;min-height:36px}
   .tabs button.chosen{background:var(--pastel-pink);box-shadow:0 1px 3px var(--shadow-soft);color:var(--ink)}
   .tabs button>span{background:var(--surface);padding:2px 5px;border-radius:6px;font-size:9px;margin-left:4px}
   .list-tools{display:flex;gap:14px;align-items:center}
-  .search{display:flex;align-items:center;gap:7px;color:var(--text-muted)}
+  .search{display:flex;align-items:center;gap:7px;color:var(--text-muted);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0 12px}
   .search svg{width:15px;fill:none;stroke:currentColor;stroke-width:1.2}
-  .search input{border:0;background:none;font-size:11px;width:100px;outline-offset:3px;padding:8px 0;color:var(--ink)}
+  .search input{border:0;background:none;font-size:12px;width:160px;outline-offset:3px;padding:8px 0;color:var(--ink);min-height:40px}
   .search input::placeholder{color:var(--text-muted)}
-  .list-tools select{border:0;background:transparent;color:var(--text-muted);font-size:10px;padding:8px 2px;cursor:pointer}
+  .list-tools select{border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:8px 2px;cursor:pointer;min-height:40px}
   .event-list{display:flex;flex-direction:column;gap:13px}
   .event-card{padding:23px 25px 16px;border:1px solid var(--border);background:var(--surface);border-radius:20px;transition:border-color .2s;box-shadow:0 3px 14px var(--shadow-soft)}
   .event-card:hover{border-color:var(--primary-border)}
@@ -299,9 +287,7 @@
   .note-line{width:34px;height:1px;background:var(--pastel-green)}
   .site-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;border-top:1px solid var(--border);padding:24px 0 29px;font-size:10px;color:var(--text-muted)}
   .site-footer>span{letter-spacing:.1px}
-  .site-footer>div{display:flex;gap:22px}
-  .site-footer button{border:0;padding:0;background:none;color:inherit;font-size:inherit}
-  .site-footer button:disabled{cursor:default}
+
   .empty-state{text-align:center;padding:55px 20px;border:1px dashed var(--border);border-radius:22px;background:var(--surface)}
   .empty-emoji{font-size:34px}
   .empty-state h3{font-family:var(--font-rounded);font-size:25px;font-weight:700;margin:16px 0}
@@ -355,103 +341,84 @@
 
   .event-creator{font-size:10px;color:var(--text-muted);margin:6px 0 0;overflow-wrap:anywhere}
 
-  .family-button{border:1px solid var(--border);border-radius:12px;background:var(--pastel-green);padding:7px 11px;font-size:11px;color:var(--green-ink);border-color:var(--pastel-green);font-weight:700}
+  .family-button{border:1px solid var(--border);border-radius:12px;background:var(--pastel-green);padding:9px 14px;font-size:12px;color:var(--green-ink);border-color:var(--pastel-green);font-weight:700;min-height:40px}
   .family-button:hover{background:var(--pastel-lime)}
 
   @media(min-width:1500px){.app-shell{max-width:1220px}
   }
   @media(max-width:950px){.app-shell{padding:0 34px}
-  h1{font-size:62px}
-  .intro{padding-top:48px}
-  .today-card{width:275px}
-  .overview{gap:23px}
-  .overview>p{display:none}
-  .title-spark{right:-55px;width:35px}
+
   .toolbar{gap:10px}
   .list-tools{gap:5px}
   .search input{width:85px}
   }
 
-  @media(max-width:680px){.app-shell{padding:0 20px}
-  .topbar{height:79px}
-  .brand{font-size:19px;gap:8px}
-  .brand-mark{width:28px;height:32px;font-size:17px}
-  .header-right{gap:13px}
-  .private-label{font-size:0;gap:0}
-  .private-label svg{width:15px}
-  .avatar{width:29px;height:29px;font-size:10px}
-  .intro{padding:36px 0 27px;align-items:flex-start;gap:22px;flex-direction:column}
-  h1{font-size:52px;letter-spacing:-1.8px}
-  .eyebrow{font-size:8px;letter-spacing:1.7px;margin-bottom:18px}
-  .title-spark{right:-61px;bottom:10px;width:35px;height:35px}
-  .intro-description{font-size:12px;margin-top:18px}
-  .today-card{width:100%;transform:none;padding:15px 17px;display:grid;grid-template-columns:1fr auto;gap:0 15px}
-  .today-top{font-size:7px;grid-column:1}
-  .today-top svg{display:none}
-  .today-date{font-size:14px;margin:10px 0 0;grid-column:1}
-  .today-time{font-size:28px;grid-column:2;grid-row:1/3;align-self:center}
-  .today-time>span{font-size:8px;margin-left:6px}
-  .today-bottom{margin-top:15px;padding-top:11px;grid-column:1/-1;font-size:9px}
-  .today-doodle{width:80px;height:80px;right:23px;top:-30px}
-  .overview{font-size:9px;gap:17px;padding:15px 12px;justify-content:space-between}
-  .overview-icon{font-size:16px}
-  .overview>div{gap:6px}
-  .overview strong{font-size:11px;margin-right:3px}
-  .events-section{padding-top:32px}
-  .section-heading{gap:10px;margin-bottom:23px}
-  h2{font-size:19px;letter-spacing:-.6px}
-  .section-heading p{font-size:10px;max-width:175px;line-height:1.5;margin-top:8px}
-  .add-button{font-size:10px;padding:11px 12px;gap:5px;white-space:nowrap}
-  .add-button>span{font-size:16px}
-  .toolbar{flex-wrap:wrap;gap:13px;margin-bottom:14px}
-  .tabs{flex:1;justify-content:flex-start}
-  .tabs button{padding:7px 10px;font-size:10px}
-  .list-tools{width:100%;justify-content:space-between}
-  .search input{width:150px}
-  .event-card{padding:17px 15px 14px;border-radius:18px}
-  .event-top{gap:10px;margin-bottom:16px}
-  .event-identity{gap:10px}
-  .event-emoji{width:35px;height:35px;font-size:20px;border-radius:9px}
-  .event-identity h3{font-size:13px;margin-bottom:6px}
-  .event-meta{font-size:8px;gap:4px;flex-wrap:wrap}
-  .meta-dot{margin:0}
-  .event-actions{gap:7px}
-  .event-countdown strong{font-size:12px;letter-spacing:-.2px}
-  .event-countdown>span{font-size:8px;max-width:90px;line-height:1.3}
-  .edit-button{width:20px;padding:0}
-  .edit-button svg{width:14px}
-  .progress-track{height:15px}
-  .progress-caption{font-size:8px}
-  .progress-caption>span:first-child{font-size:10px}
-  .list-footer{font-size:8px;gap:10px}
-  .footer-separator{margin:0 6px}
-  .completed-toggle{gap:5px;font-size:9px}
-  .closing-note{gap:9px;padding:34px 0}
-  .closing-note p{font-size:11px}
-  .note-line{width:15px}
-  .site-footer{font-size:9px;align-items:flex-start;padding:20px 0;gap:15px;line-height:1.7}
-  .site-footer>div{gap:13px;white-space:nowrap}
-  .site-footer>span>.footer-separator{display:none}
-  .site-footer>span{max-width:145px}
-  .site-footer>span>.brand-dot:after{content:' ';display:block}
-  dialog{padding:23px 20px}
-  .dialog-heading h2{font-size:24px}
-  .dialog-footer{flex-wrap:wrap}
-  .dialog-footer .primary{padding:11px 13px}
-  .dialog-footer .secondary{padding:11px}
-  .color-picker{gap:11px}
-  .toast{font-size:11px;width:max-content;padding:13px 17px}
-  .event-target{display:none}
-  }
-
-  @media(max-width:360px){h1{font-size:42px}
-  .title-spark{right:-32px;width:24px;height:24px}
-  .header-right{gap:9px}
-  .today-card{column-gap:10px}
-  .today-time{font-size:24px}
+  @media(max-width:680px){
+    .app-shell{padding:0 18px}
+    .brand-mark{width:28px;height:32px;font-size:17px}
+    .eyebrow{font-size:8px;letter-spacing:1.7px;margin-bottom:18px}
+    h2{font-size:19px;letter-spacing:-.6px}
+    .toolbar{flex-wrap:wrap;gap:10px;margin-bottom:14px}
+    .event-card{padding:17px 15px 14px;border-radius:18px}
+    .event-top{gap:10px;margin-bottom:16px}
+    .event-identity{gap:10px}
+    .event-emoji{width:35px;height:35px;font-size:20px;border-radius:9px}
+    .event-identity h3{font-size:13px;margin-bottom:6px}
+    .event-meta{font-size:8px;gap:4px;flex-wrap:wrap}
+    .meta-dot{margin:0}
+    .event-actions{gap:7px}
+    .event-countdown strong{font-size:12px;letter-spacing:-.2px}
+    .event-countdown>span{font-size:8px;max-width:90px;line-height:1.3}
+    .edit-button{width:20px;padding:0}
+    .edit-button svg{width:14px}
+    .progress-track{height:15px}
+    .progress-caption{font-size:8px}
+    .progress-caption>span:first-child{font-size:10px}
+    .list-footer{font-size:8px;gap:10px}
+    .footer-separator{margin:0 6px}
+    .completed-toggle{gap:5px;font-size:9px}
+    .closing-note{gap:9px;padding:28px 0}
+    .closing-note p{font-size:11px}
+    .note-line{width:15px}
+    .site-footer{font-size:9px;align-items:flex-start;padding:20px 0;gap:15px;line-height:1.7}
+    .site-footer>span{max-width:145px}
+    dialog{padding:23px 20px}
+    .dialog-heading h2{font-size:24px}
+    .dialog-footer{flex-wrap:wrap}
+    .dialog-footer .primary{padding:11px 13px}
+    .dialog-footer .secondary{padding:11px}
+    .color-picker{gap:11px}
+    .toast{font-size:11px;width:max-content;padding:13px 17px}
+    .event-target{display:none}
+    .topbar{height:64px}
+    .brand{font-size:18px;gap:8px}
+    .header-right{gap:8px}
+    .settings-button{padding:9px}
+    .family-button{padding:9px 12px}
+    .events-section{padding-top:22px}
+    .section-heading{gap:12px;margin-bottom:18px}
+    h1{font-size:27px;letter-spacing:-.7px}
+    .mobile-break{display:block}
+    .section-heading p{font-size:11px;margin-top:8px;max-width:none}
+    .add-button{font-size:11px;padding:12px;gap:5px}
+    .add-button>span{font-size:18px}
+    .tabs{width:100%;flex:none}
+    .tabs button{flex:1;padding:7px 8px;font-size:11px;min-height:36px}
+    .list-tools{width:100%;gap:12px;justify-content:space-between}
+    .search{flex:1;min-width:0}
+    .search input{width:100%;min-width:0;font-size:12px}
+    .list-tools select{max-width:125px;font-size:11px}
   }
 
   @media(prefers-reduced-motion:reduce){.progress-fill{transition:none}
   .loading-ring{animation:none}
+  }
+
+  @media(max-width:360px){
+    .settings-button>span{display:none}
+    .brand{font-size:16px;gap:6px}
+    .family-button{font-size:11px;padding:9px 10px}
+    h1{font-size:24px}
+    .add-button{font-size:10px;padding:11px 9px}
   }
 </style>

@@ -29,9 +29,11 @@ See [architecture and authentication](docs/architecture.md) for the protocol and
 
 ## Add to Home Screen
 
-**Add to Home Screen** is available before and after sign-in in supported browsers. It opens the browser's installation prompt when available, or shows the appropriate browser-menu instructions. On iPhone and iPad, use Safari's **Share → Add to Home Screen**, then open the new icon to sign in and enable notifications.
+**Add to Home Screen** is available before sign-in and under **Settings** after sign-in in supported browsers. It opens the browser's installation prompt when available, or shows the appropriate browser-menu instructions. On iPhone and iPad, use Safari's **Share → Add to Home Screen**, then open the new icon to sign in and enable notifications.
 
 The control hides when running as an installed app and after the browser reports a completed installation. Ordinary browser tabs cannot reliably detect all existing installations, so they may still show installation guidance. No permanent local installation flag is stored, allowing the control to return after uninstalling.
+
+The signed-in dashboard opens directly on **Your time, in progress.** Use **Settings** in the header for push notifications, installation, event export, and sign-out. **Family** and **Add event** remain directly accessible. Closing Settings preserves the event search, filter, and sort order.
 
 ## Local development
 

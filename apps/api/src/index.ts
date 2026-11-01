@@ -5,6 +5,7 @@ import { auth } from './auth';
 import { events } from './events';
 import { push } from './push';
 import { runPushReminders } from './push-scheduler';
+import { roulettes } from './roulettes';
 import { jsonObject,memberUsername,requireAuth,throttle } from './security';
 import type { AppEnv,ApiBindings } from './types';
 // eslint-disable-next-line functional/no-throw-statements -- Propagate unexpected D1 failures to Hono’s request error boundary without changing the original rejection.
@@ -72,6 +73,8 @@ app.post('/api/family/members',requireAuth,async c=>{
 // Use a schedule-specific path; /api/events on workers.dev matches EasyPrivacy.
 // eslint-disable-next-line functional/no-expression-statements -- Mount schedule HTTP endpoints on the Hono router.
 app.route('/api/schedules',events);
+// eslint-disable-next-line functional/no-expression-statements -- Mount the authenticated family roulette router.
+app.route('/api/roulettes',roulettes);
 // Retain the old route while existing browser bundles refresh.
 // eslint-disable-next-line functional/no-expression-statements -- Mount the legacy schedule HTTP alias on the Hono router.
 app.route('/api/events',events);

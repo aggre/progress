@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import type { EventInput } from '@little/shared/events';
-import type { LoginChallenge, Identity, ScheduleRecord } from '@little/shared/api';
+import type { LoginChallenge, Identity, ScheduleRecord, RouletteRecord } from '@little/shared/api';
 
 const origin='http://127.0.0.1:4321';
 const script=(await build({entryPoints:['apps/api/src/index.ts'],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022'})).outputFiles[0].text;
@@ -28,7 +28,7 @@ async function fixture(t:TestContext){
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native D1 database handle used by this isolated test environment.
  const db=await mf.getD1Database('DB');
  // eslint-disable-next-line functional/no-loop-statements -- Read and apply migration files in order against this isolated D1 environment.
- for(const file of ['0001_events.sql','0002_family_auth.sql','0003_web_push.sql']){
+ for(const file of ['0001_events.sql','0002_family_auth.sql','0003_web_push.sql','0004_roulettes.sql','0005_activity_plans.sql']){
   const source=await readFile(new URL('../migrations/'+file,import.meta.url),'utf8');
   const migration=source.split('\n').reduce(migrationLine,{pending:'',statements:{},count:0});
   // eslint-disable-next-line functional/no-loop-statements -- Await each D1 schema write before applying dependent migration statements.
@@ -308,3 +308,109 @@ await test('legacy events are preserved and require an explicit operator ownersh
  await claimed.bootstrap(d,'first-user',1);
  const legacyTitle=((await (await claimed.request('/api/schedules','GET',undefined,d.sessionToken)).json()) as Readonly<{events:ReadonlyArray<Readonly<{title:string}>>}>).events[0].title;return assert.deepEqual([legacyTitle,await claimed.db.prepare('SELECT count(*) AS n FROM legacy_events').first('n')],['Preserved legacy event',1]);
 });
+
+/* eslint-disable functional/no-expression-statements, functional/prefer-immutable-types, functional/no-loop-statements -- Exercise HTTP requests and D1 setup sequentially at the integration-test runtime boundary. */
+await test('roulettes persist for a family while only the creator can edit or delete them', async t => {
+ const f = await fixture(t), owner = await f.challenge('wheel-owner');
+ await f.bootstrap(owner, 'wheel-owner');
+ await f.request('/api/family/members', 'POST', { username: 'wheel-member' }, owner.sessionToken);
+ const member = await f.challenge('wheel-member');
+ await f.request(`/api/auth/challenges/${member.id}/approve`, 'POST', { approvalToken: member.approvalToken }, owner.sessionToken);
+ const outsider = await f.challenge('wheel-outsider'), familyId = randomUUID(), userId = randomUUID();
+ await f.db.batch([
+  f.db.prepare('INSERT INTO families (id,name) VALUES (?,?)').bind(familyId, 'Other family'),
+  f.db.prepare('INSERT INTO users (id,username,family_id) VALUES (?,?,?)').bind(userId, 'wheel-outsider', familyId),
+  f.db.prepare("UPDATE login_challenges SET status='approved',approved_user_id=?,approved_at=unixepoch() WHERE id=?").bind(userId, outsider.id),
+ ]);
+ const input = { title: ' Dinner ', options: [' Pasta ', 'カレー', 'Tacos'] };
+ for (const method of ['GET', 'POST', 'PUT', 'DELETE']) {
+  assert.equal((await f.request('/api/roulettes' + (['PUT', 'DELETE'].includes(method) ? '/unknown' : ''), method, method === 'POST' || method === 'PUT' ? input : undefined)).status, 401);
+ }
+ const created = await f.request('/api/roulettes', 'POST', input, owner.sessionToken);
+ assert.equal(created.status, 201);
+ const { roulette } = await created.json() as { roulette: RouletteRecord };
+ assert.deepEqual([roulette.title, roulette.options, roulette.canEdit, roulette.createdBy.username], ['Dinner', ['Pasta', 'カレー', 'Tacos'], true, 'wheel-owner']);
+ const list = await (await f.request('/api/roulettes', 'GET', undefined, member.sessionToken)).json() as { roulettes: readonly RouletteRecord[] };
+ assert.deepEqual(list.roulettes, [{ ...roulette, canEdit: false }]);
+ assert.deepEqual(await (await f.request('/api/roulettes?familyId=' + roulette.createdBy.id, 'GET', undefined, outsider.sessionToken)).json(), { roulettes: [] });
+ for (const token of [member.sessionToken, outsider.sessionToken]) {
+  assert.equal((await f.request('/api/roulettes/' + roulette.id, 'PUT', { title: 'Changed', options: ['a', 'b'] }, token)).status, 404);
+  assert.equal((await f.request('/api/roulettes/' + roulette.id, 'DELETE', undefined, token)).status, 404);
+ }
+ for (const invalid of [{ ...input, ownerId: userId }, { ...input, familyId }, { ...input, options: ['only one'] }, { ...input, options: ['a', ''] }]) {
+  assert.equal((await f.request('/api/roulettes', 'POST', invalid, owner.sessionToken)).status, 400);
+ }
+ assert.equal((await f.request('/api/roulettes/' + roulette.id, 'PUT', { ...input, options: [1, 2] }, owner.sessionToken)).status, 400);
+ const updated = await f.request('/api/roulettes/' + roulette.id, 'PUT', { title: 'Weekend', options: ['Park', 'Museum'] }, owner.sessionToken);
+ assert.equal(updated.status, 200);
+ const shared = await (await f.request('/api/roulettes', 'GET', undefined, member.sessionToken)).json() as { roulettes: readonly RouletteRecord[] };
+ assert.deepEqual([shared.roulettes[0].title, shared.roulettes[0].options, shared.roulettes[0].createdAt], ['Weekend', ['Park', 'Museum'], roulette.createdAt]);
+ const memberCreated = await f.request('/api/roulettes', 'POST', { title: 'Member wheel', options: ['Yes', 'No'] }, member.sessionToken);
+ assert.equal(memberCreated.status, 201);
+ assert.equal((await f.request('/api/roulettes/' + roulette.id, 'DELETE', undefined, owner.sessionToken)).status, 200);
+ const remaining = await (await f.request('/api/roulettes', 'GET', undefined, owner.sessionToken)).json() as { roulettes: readonly RouletteRecord[] };
+ assert.equal(remaining.roulettes.length, 1);
+ assert.equal(remaining.roulettes[0].createdBy.username, 'wheel-member');
+ assert.equal((await f.request('/api/roulettes/' + roulette.id, 'DELETE', undefined, owner.sessionToken)).status, 404);
+});
+/* eslint-enable functional/no-expression-statements, functional/prefer-immutable-types, functional/no-loop-statements */
+
+/* eslint-disable functional/no-expression-statements, functional/prefer-immutable-types, functional/no-loop-statements -- Set up family identities and exercise sequential HTTP/D1 effects in this integration test. */
+await test('roulette starts create one shared activity with a stable plan, safe retries, and starter ownership', async t => {
+ const f = await fixture(t), owner = await f.challenge('play-owner');
+ await f.bootstrap(owner, 'play-owner');
+ await f.request('/api/family/members', 'POST', { username: 'play-member' }, owner.sessionToken);
+ const member = await f.challenge('play-member');
+ await f.request(`/api/auth/challenges/${member.id}/approve`, 'POST', { approvalToken: member.approvalToken }, owner.sessionToken);
+ const outsider = await f.challenge('play-outsider'), familyId = randomUUID(), userId = randomUUID();
+ await f.db.batch([
+  f.db.prepare('INSERT INTO families (id,name) VALUES (?,?)').bind(familyId, 'Other family'),
+  f.db.prepare('INSERT INTO users (id,username,family_id) VALUES (?,?,?)').bind(userId, 'play-outsider', familyId),
+  f.db.prepare("UPDATE login_challenges SET status='approved',approved_user_id=?,approved_at=unixepoch() WHERE id=?").bind(userId, outsider.id),
+ ]);
+ const input = { title: 'Playtime', options: ['Drawing', 'LEGO'], playMinutes: 30, afterTask: { title: ' Clean up ', minutes: 5 } };
+ const create = await f.request('/api/roulettes', 'POST', input, owner.sessionToken);
+ assert.equal(create.status, 201);
+ const { roulette } = await create.json() as { roulette: RouletteRecord };
+ assert.deepEqual([roulette.playMinutes, roulette.afterTask], [30, { title: 'Clean up', minutes: 5 }]);
+ const path = `/api/roulettes/${roulette.id}/start`, start = { choiceIndex: 0, requestId: randomUUID(), version: roulette.updatedAt };
+ assert.equal((await f.request(path, 'POST', start)).status, 401);
+ assert.equal((await f.request(path, 'POST', start, outsider.sessionToken)).status, 404);
+ for (const invalid of [{ ...start, choiceIndex: 2 }, { ...start, choiceIndex: -1 }, { ...start, choiceIndex: 1.5 }, { ...start, requestId: 'invalid' }, { ...start, ownerId: userId }, { ...start, startAt: '2026-01-01' }]) {
+  assert.equal((await f.request(path, 'POST', invalid, member.sessionToken)).status, 400);
+ }
+ assert.equal((await f.request(path, 'POST', { ...start, version: 'old-version' }, member.sessionToken)).status, 409);
+ const before = Date.now();
+ const [first, second] = await Promise.all([f.request(path, 'POST', start, member.sessionToken), f.request(path, 'POST', start, member.sessionToken)]);
+ assert.ok([first.status, second.status].includes(201));
+ assert.ok([first.status, second.status].includes(200));
+ const saved = await first.json() as { event: ScheduleRecord }, replay = await second.json() as { event: ScheduleRecord };
+ assert.deepEqual(saved, replay);
+ const event = saved.event;
+ assert.equal(event.title, 'Drawing');
+ assert.equal(event.createdBy.username, 'play-member');
+ assert.equal(event.canEdit, true);
+ assert.ok(Date.parse(event.startAt) >= before && Date.parse(event.startAt) <= Date.now());
+ assert.equal(Date.parse(event.targetAt) - Date.parse(event.startAt), 35 * 60000);
+ assert.deepEqual(event.activity, { playMinutes: 30, afterTask: { title: 'Clean up', minutes: 5 }, source: { rouletteId: roulette.id, choiceIndex: 0, version: roulette.updatedAt } });
+ const shared = await (await f.request('/api/schedules', 'GET', undefined, owner.sessionToken)).json() as { events: readonly ScheduleRecord[] };
+ assert.deepEqual(shared.events, [{ ...event, canEdit: false }]);
+ assert.deepEqual(await (await f.request('/api/schedules', 'GET', undefined, outsider.sessionToken)).json(), { events: [] });
+ assert.equal((await f.request(path, 'POST', { ...start, choiceIndex: 1 }, member.sessionToken)).status, 409);
+ assert.equal((await f.request('/api/schedules/' + event.id, 'PUT', { ...event, title: 'Tampered', targetAt: new Date(Date.parse(event.targetAt) + 60000).toISOString() }, member.sessionToken)).status, 404);
+ const edited = await f.request('/api/roulettes/' + roulette.id, 'PUT', { ...input, options: ['Reading', 'Puzzle'], playMinutes: 10, afterTask: null }, owner.sessionToken);
+ assert.equal(edited.status, 200);
+ assert.deepEqual(await (await f.request(path, 'POST', start, member.sessionToken)).json(), saved);
+ const changed = await edited.json() as { roulette: RouletteRecord };
+ assert.equal((await f.request(path, 'POST', { ...start, requestId: randomUUID() }, member.sessionToken)).status, 409);
+ const solo = await f.request(path, 'POST', { ...start, requestId: randomUUID(), version: changed.roulette.updatedAt }, owner.sessionToken);
+ assert.equal(solo.status, 201);
+ const soloEvent = (await solo.json() as { event: ScheduleRecord }).event;
+ assert.equal(Date.parse(soloEvent.targetAt) - Date.parse(soloEvent.startAt), 10 * 60000);
+ assert.equal(soloEvent.activity?.afterTask, null);
+ assert.equal((await f.request('/api/roulettes/' + roulette.id, 'DELETE', undefined, owner.sessionToken)).status, 200);
+ assert.deepEqual(await (await f.request(path, 'POST', start, member.sessionToken)).json(), saved);
+ assert.equal((await f.request('/api/schedules/' + event.id, 'DELETE', undefined, owner.sessionToken)).status, 404);
+ assert.equal((await f.request('/api/schedules/' + event.id, 'DELETE', undefined, member.sessionToken)).status, 200);
+});
+/* eslint-enable functional/no-expression-statements, functional/prefer-immutable-types, functional/no-loop-statements */

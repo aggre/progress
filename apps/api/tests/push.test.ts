@@ -70,7 +70,7 @@ async function fixture(t: TestContext, configured = true) {
   // eslint-disable-next-line functional/prefer-immutable-types -- The native D1 handle applies real migrations and fixture writes.
   const db = await mf.getD1Database('DB');
   // eslint-disable-next-line functional/no-loop-statements -- Migrations must be applied sequentially to the isolated test database.
-  for (const file of ['0001_events.sql', '0002_family_auth.sql', '0003_web_push.sql']) {
+  for (const file of ['0001_events.sql', '0002_family_auth.sql', '0003_web_push.sql', '0004_roulettes.sql', '0005_activity_plans.sql']) {
     const migration = (await readFile(new URL('../migrations/' + file, import.meta.url), 'utf8')).split('\n').reduce(migrationLine, { pending: '', statements: {}, count: 0 });
     // eslint-disable-next-line functional/no-loop-statements -- Each schema statement depends on the previous statement having completed.
     for (const statement of Object.values(migration.statements)) {

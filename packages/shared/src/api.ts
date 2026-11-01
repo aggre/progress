@@ -1,9 +1,20 @@
 import type { ScheduleEvent } from './events';
+import type { RouletteInput } from './roulette';
+import type { ActivityRun } from './activity';
+
+export interface RouletteRecord extends RouletteInput {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly createdBy: Pick<User, 'id' | 'username'>;
+  readonly canEdit: boolean;
+}
 
 export interface User { readonly id: string; readonly username: string; readonly familyId: string; }
 export interface Family { readonly id: string; readonly name: string; }
 export interface Identity { readonly user: User; readonly family: Family; }
 export interface ScheduleRecord extends ScheduleEvent {
+  readonly activity?: ActivityRun;
   readonly createdBy: Pick<User, 'id' | 'username'>;
   readonly canEdit: boolean;
 }
@@ -29,3 +40,6 @@ export type LoginStatus = Readonly<{ status: 'pending' | 'approved' | 'expired' 
 // POST /api/family/members { username } -> { user: User }.
 // Schedules use /api/schedules and /api/schedules/:id.
 // Family members can read each other's schedules; only the creator can edit or delete.
+// Roulettes use /api/roulettes and /api/roulettes/:id with the same family/creator permissions.
+// POST /api/roulettes/:id/start { choiceIndex, requestId, version } -> { event: ScheduleRecord }.
+// Every family member may start a saved wheel; the starter owns the resulting grouped activity.

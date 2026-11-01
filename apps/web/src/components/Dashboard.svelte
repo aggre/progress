@@ -6,6 +6,8 @@
   import type { Identity, ScheduleRecord } from '@little/shared/api';
   import { api, BASE_PATH } from '../lib/api';
   import SettingsPanel from './SettingsPanel.svelte';
+  import ActivityCard from './ActivityCard.svelte';
+  import RouletteLibrary from './RouletteLibrary.svelte';
   type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
 
@@ -22,8 +24,10 @@
   // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native event editor dialog at the DOM boundary.
   let dialog: HTMLDialogElement;
   // eslint-disable-next-line functional/prefer-immutable-types -- Svelte binds the mutable native input used to focus the event editor.
-  let nameInput: HTMLInputElement;
+  let nameInput = $state<HTMLInputElement>();
   let editing = $state<Readonly<ScheduleRecord> | null>(null);
+  let editorKind = $state<'countdown' | 'roulette'>('countdown');
+  let editorOpen = $state(false);
   let saving = $state(false);
   let formError = $state('');
   let title = $state('');
@@ -47,7 +51,7 @@
   const active: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(Object.values(rows).filter(e=>!e.timing.complete).entries()));
   const repeatingCount = $derived(events.filter((e:Readonly<ScheduleRecord>)=>e.repeatUnit !== 'none').length);
   const visible: Readonly<Record<number, EventRow>> = $derived.by((): Readonly<Record<number, EventRow>>=>{
-    const list: Readonly<Record<number, EventRow>> = Object.fromEntries(Object.values(rows).filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && e.title.toLowerCase().includes(query.toLowerCase())).entries());
+    const list: Readonly<Record<number, EventRow>> = Object.fromEntries(Object.values(rows).filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && `${e.title} ${e.activity?.afterTask?.title ?? ''}`.toLowerCase().includes(query.toLowerCase())).entries());
     return Object.fromEntries((sort === 'soonest' ? sortBy((event: EventRow)=>event.timing.end,Object.values(list))
       : sort === 'name' ? sortRows((a: EventRow,b: EventRow)=>a.title.localeCompare(b.title),Object.values(list))
       : Object.values(list)).entries());
@@ -75,14 +79,14 @@
     return ()=>{clearInterval(timer);clearTimeout(toastTimer);window.removeEventListener('focus',focus);};
   });
   // eslint-disable-next-line functional/prefer-immutable-types -- This browser dialog or API operation returns its native completion Promise.
-  async function openEditor(event: Readonly<ScheduleRecord> | null=null) {
-    return event && !event.canEdit ? undefined : (
-      editing=event, formError='', saving=false,
+  async function openEditor(event: Readonly<ScheduleRecord> | null=null, kind: 'countdown' | 'roulette'='countdown') {
+    return event && (!event.canEdit || event.activity) ? undefined : (
+      editing=event, editorKind=kind, editorOpen=true, formError='', saving=false,
       zone=event?.timeZone || 'Asia/Tokyo',
       title=event?.title || '', emoji=event?.emoji || '✨', color=event?.color || palette[events.length % Object.values(palette).length],
       repeatUnit=event?.repeatUnit || 'none', repeatEvery=event?.repeatEvery || 1,
       targetLocal=toLocal(event?.targetAt || new Date(Date.now()+86400000*7).toISOString(),zone),
-      dialog.showModal(), await tick(), nameInput?.focus()
+      dialog.showModal(), await tick(), kind === 'countdown' ? nameInput?.focus() : undefined
     );
   }
   // eslint-disable-next-line functional/functional-parameters -- Svelte calls this parameterless two-way binding getter to read the current reactive repeat selection.
@@ -140,6 +144,11 @@
     // eslint-disable-next-line functional/prefer-immutable-types -- The native anchor must be configured and clicked to download the export.
     const a=document.createElement('a');a.href=url;a.download='little-by-little-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
+  function activityStarted(event: ScheduleRecord) {
+    events = [...events.filter((item: Readonly<ScheduleRecord>) => item.id !== event.id), event];
+    query = ''; filter = 'all'; now = Date.now(); dialog.close(); notify('Your playtime has started.');
+    void tick().then(() => document.getElementById(`activity-${event.id}`)?.focus());
+  }
   function confirmDelete(e: Readonly<ScheduleRecord>) { deleteEvent=e;formError='';deleteDialog.showModal(); }
 </script>
 
@@ -156,7 +165,7 @@
   <main>
     <section class="events-section" aria-labelledby="events-heading">
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the browser Add event button. The editor callback returns its native dialog completion Promise. -->
-      <div class="section-heading"><div><h1 id="events-heading">Your time,<br class="mobile-break"/> in progress<span class="heading-dot">.</span></h1><p class="event-summary" aria-label="Schedule overview">{#if loading}Your family’s shared moments{:else}<span><strong>{Object.values(active).length}</strong> upcoming</span><span class="summary-dot" aria-hidden="true">·</span><span><strong>{repeatingCount}</strong> repeating</span>{/if}</p></div><button class="primary add-button" onclick={()=>openEditor()}><span aria-hidden="true">＋</span> Add event</button></div>
+      <div class="section-heading"><div><h1 id="events-heading">Your time,<br class="mobile-break"/> in progress<span class="heading-dot">.</span></h1><p class="event-summary" aria-label="Schedule overview">{#if loading}Your family’s shared moments{:else}<span><strong>{Object.values(active).length}</strong> upcoming</span><span class="summary-dot" aria-hidden="true">·</span><span><strong>{repeatingCount}</strong> repeating</span>{/if}</p></div><div class="add-actions"><button class="secondary" onclick={()=>openEditor(null, 'roulette')}>Family roulettes ↻</button><button class="primary add-button" onclick={()=>openEditor()}><span aria-hidden="true">＋</span> Add event</button></div></div>
   <!-- eslint-disable-next-line functional/functional-parameters -- Browser filter buttons update the currently selected event-list tab. -->
       <div class="toolbar"><div class="tabs" aria-label="Filter events"><button class:chosen={filter==='all'} onclick={()=>filter='all'} aria-pressed={filter==='all'}>All events <span>{events.length}</span></button><button class:chosen={filter==='repeating'} onclick={()=>filter='repeating'} aria-pressed={filter==='repeating'}>Repeating</button><button class:chosen={filter==='once'} onclick={()=>filter='once'} aria-pressed={filter==='once'}>One-time</button></div><div class="list-tools"><label class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input aria-label="Search events" placeholder="Find an event" bind:value={query}/></label><select aria-label="Sort events" bind:value={sort}><option value="custom">Date added</option><option value="soonest">Soonest first</option><option value="name">Name A–Z</option></select></div></div>
       {#if error}<div class="error-banner" role="alert"><span>{error}</span><button onclick={load}>Try again</button></div>{/if}
@@ -166,12 +175,14 @@
   <!-- eslint-disable-next-line functional/functional-parameters -- Reset browser search and filter controls from the Show all events button. -->
       {:else if !Object.values(visible).length && !error}<div class="empty-state"><span class="empty-emoji">🔎</span><h3>No moments here, just yet.</h3><p>Try another search or filter, or add something new.</p><button class="text-button" onclick={()=>{query='';filter='all';showCompleted=true;}}>Show all events</button></div>
       {:else}<div class="event-list">{#each Object.values(visible) as e (e.id)}
+        {#if e.activity}<ActivityCard event={e} plan={e.activity} {now} onremove={confirmDelete} />{:else}
         <article class="event-card" class:is-complete={e.timing.complete} style={`--event-color:${e.color}`}>
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native editor for the schedule selected with its browser edit button. The editor callback returns its native dialog completion Promise. -->
           <div class="event-top"><div class="event-identity"><span class="event-emoji" aria-hidden="true">{e.emoji}</span><div><h3>{e.title}</h3><p class="event-meta"><span class="repeat-symbol" aria-hidden="true">{e.repeatUnit==='none' ? '◷' : '↻'}</span>{repeatLabel(e)}<span class="meta-dot">·</span><span class="event-target" title={`${dateLabel(e.timing.end,e.timeZone)} · ${e.timeZone}`}>{new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:e.timeZone}).format(e.timing.end)}</span></p><p class="event-creator">Added by {e.createdBy.username}</p></div></div><div class="event-actions"><div class="event-countdown"><strong>{e.timing.complete ? 'Arrived' : remainingText(e.timing.remaining)}</strong><span>{e.timing.complete ? 'You made it.' : e.timing.upcoming ? 'until it arrives · starts later' : 'until it arrives'}</span></div>{#if e.canEdit}<button class="edit-button" aria-label={`Edit ${e.title}`} title="Edit event" onclick={()=>openEditor(e)}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m12.5 4.5 3 3M3.5 16.5l3.7-.7L16 7a2.1 2.1 0 0 0-3-3L4.2 12.8l-.7 3.7Z"/></svg></button>{/if}</div></div>
           <div class="progress-track" role="progressbar" aria-label={`${e.title}: elapsed time`} aria-valuenow={Math.round(e.timing.progress*10)/10} aria-valuemin="0" aria-valuemax="100" aria-valuetext={`${e.timing.progress.toFixed(1)} percent elapsed; ${remainingText(e.timing.remaining)} remaining`}><div class="progress-fill" style={`width:${e.timing.progress}%`}></div><span class="bar-tick one"></span><span class="bar-tick two"></span><span class="bar-tick three"></span></div>
           <div class="progress-caption"><span>{e.timing.complete ? 'A moment worth keeping.' : e.timing.progress < 1 ? 'A fresh start.' : e.timing.progress > 90 ? 'Almost there.' : 'A little closer.'}</span><span><strong>{e.timing.progress.toFixed(1)}%</strong> of the way</span></div>
         </article>
+        {/if}
       {/each}</div>{/if}
       <div class="list-footer"><label class="completed-toggle"><input type="checkbox" bind:checked={showCompleted}/><span>Show completed{completed ? ` (${completed})` : ''}</span></label><span>{Object.values(visible).length} {Object.values(visible).length===1 ? 'event' : 'events'}<span class="footer-separator">·</span>Updated every second</span></div>
     </section>
@@ -185,11 +196,22 @@
   <SettingsPanel {identity} eventCount={events.length} {clockDate} {clockTime} onclose={() => { settingsOpen = false; }} onexport={exportEvents} {onlogout} />
 {/if}
 
-<!-- eslint-disable-next-line functional/prefer-immutable-types -- Read the native cancel Event to prevent closing the browser editor while saving. -->
-<dialog bind:this={dialog} class="event-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}>
-  <form onsubmit={save}>
+<!-- eslint-disable-next-line functional/prefer-immutable-types, functional/functional-parameters -- Read the native cancel Event to prevent closing the browser editor while saving. -->
+<dialog bind:this={dialog} class="event-dialog" aria-labelledby="editor-heading" onclose={() => editorOpen = false} oncancel={e=>saving ? e.preventDefault() : undefined}>
   <!-- eslint-disable-next-line functional/functional-parameters -- Close the native event editor from its browser close button. -->
-    <div class="dialog-heading"><div><p class="eyebrow">MAKE TIME FOR IT</p><h2>{editing ? 'Edit your moment.' : 'A new little countdown.'}</h2></div><button type="button" class="close-button" aria-label="Close editor" disabled={saving} onclick={()=>dialog.close()}>×</button></div>
+    <div class="dialog-heading"><div><p class="eyebrow">MAKE TIME FOR IT</p><h2 id="editor-heading">{editing ? 'Edit your moment.' : editorKind === 'roulette' ? 'Leave it to a little spin.' : 'A new little countdown.'}</h2></div><button type="button" class="close-button" aria-label="Close editor" disabled={saving} onclick={()=>dialog.close()}>×</button></div>
+    {#if !editing}
+      <!-- eslint-disable functional/functional-parameters -- Type selector buttons update the native event dialog view. -->
+      <div class="event-kind" aria-label="What would you like to add?">
+        <button type="button" class:chosen={editorKind === 'countdown'} aria-pressed={editorKind === 'countdown'} disabled={saving} onclick={() => editorKind = 'countdown'}>◷ Countdown</button>
+        <button type="button" class:chosen={editorKind === 'roulette'} aria-pressed={editorKind === 'roulette'} disabled={saving} onclick={() => editorKind = 'roulette'}>↻ Roulette</button>
+      </div>
+      <!-- eslint-enable functional/functional-parameters -->
+    {/if}
+    {#if editorKind === 'roulette' && editorOpen}
+      <RouletteLibrary onbusy={(value: boolean) => saving = value} onstarted={activityStarted} />
+    {:else if editorKind === 'countdown'}
+    <form onsubmit={save}>
     <div class="form-grid name-row"><label>Emoji<input class="emoji-input" bind:value={emoji} required maxlength="32" aria-label="Event emoji"/></label><label>Event name<input bind:this={nameInput} bind:value={title} placeholder="Something to look forward to" required maxlength="100"/></label></div>
   <!-- eslint-disable-next-line functional/functional-parameters -- Update the browser event editor emoji from its picker button. -->
     <div class="emoji-picker" aria-label="Choose an emoji">{#each Object.values(emojis) as item (item)}<button type="button" class:selected={emoji===item} aria-label={`Use ${item}`} aria-pressed={emoji===item} onclick={()=>emoji=item}>{item}</button>{/each}</div>
@@ -204,6 +226,7 @@
 <!-- eslint-disable-next-line functional/functional-parameters -- Browser dialog buttons open deletion confirmation or cancel editing. -->
     <div class="dialog-footer">{#if editing}<button type="button" class="danger-button" disabled={saving} onclick={()=>confirmDelete(editing!)}>Delete event</button>{:else}<span></span>{/if}<div><button type="button" class="secondary" disabled={saving} onclick={()=>dialog.close()}>Cancel</button><button class="primary" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create event'}</button></div></div>
   </form>
+  {/if}
 </dialog>
 <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Browser confirmation buttons close the native dialogs or delete the selected schedule.  The cancel Event and deletion completion Promise belong to the native browser boundary. -->
 <dialog bind:this={deleteDialog} class="delete-dialog" oncancel={e=>saving ? e.preventDefault() : undefined}><h2>Let this moment go?</h2><p>“{deleteEvent?.title}” will be permanently deleted.</p>{#if formError}<p class="form-error" role="alert">{formError}</p>{/if}<div><button class="secondary" disabled={saving} onclick={()=>deleteDialog.close()}>Keep it</button><button class="delete-confirm" disabled={saving} onclick={async()=>{await remove();return !deleteDialog.open ? dialog.close() : undefined;}}>{saving ? 'Deleting…' : 'Delete event'}</button></div></dialog>
@@ -421,4 +444,6 @@
     h1{font-size:24px}
     .add-button{font-size:10px;padding:11px 9px}
   }
+
+  .add-actions{display:flex;align-items:center;gap:10px}.event-kind{display:flex;gap:6px;padding:5px;background:var(--surface-pink);border-radius:8px;margin-top:22px}.event-kind button{flex:1;border:0;background:none;padding:10px;border-radius:5px;color:var(--text-muted);font-size:12px}.event-kind button.chosen{background:var(--surface);color:var(--ink);box-shadow:0 1px 4px #32452112}@media(max-width:600px){.add-actions{flex-direction:column-reverse;align-items:stretch;gap:7px}.add-actions .secondary{font-size:10px;padding:8px}}
 </style>

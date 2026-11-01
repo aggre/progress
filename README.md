@@ -93,3 +93,32 @@ The intended project URL is `https://aggre.github.io/progress/`. GitHub Pages se
 - A Worker checks upcoming events every minute using each event's time zone and recurrence. Delivery receipts and notification tags suppress repeated reminders across reloads and open tabs. Search and filters do not affect reminders; no open-tab notification timer is needed.
 - Notifications can arrive after the app tab closes. HTTPS (or localhost), a browser with Push API support, browser permission, and device notification settings are required. Device sleep, offline operation, browser shutdown, or force-stop can delay or prevent delivery; Web Push is not an exact alarm. On iPhone and iPad, use a supported version of iOS/iPadOS and add the app to the Home Screen before enabling notifications.
 - Subscriptions belong to the current signed-in browser session. Turning notifications off or signing out stops future sends; session expiry also stops sends. Sign in again and enable notifications to resume. A push already accepted by the browser's push service may still be delivered.
+
+## Family roulettes
+
+Open **Add event → Roulette**, or **Family roulettes**, to save a wheel of fun
+activities for everyone in your family. Give it a name, 2–20 choices, and a play
+time of 1–240 minutes. Optionally add one task to do afterward, such as **Clean up**
+for 5 minutes (1–60 minutes). Only the wheel's creator can change its settings.
+Existing wheels default to 30 minutes with no follow-up task.
+
+Flick with a finger or mouse to set the speed and direction. Grab the wheel again
+to slow down, speed up, reverse, or hold it still. The **Spin the wheel** button
+also supports keyboard input and reduced-motion preferences.
+
+After a spin, review the play time and optional task, then press **Start this
+plan**. Spinning or rerolling alone does not create a schedule. Starting saves one
+family-shared activity card, owned by the person who started it. The card switches
+from play to the follow-up task automatically, and completes after both steps.
+Use **Show completed** to see finished activities. The starter can delete the
+whole activity using its × button; started plans keep their saved settings.
+
+Times are stored as absolute instants, so reloading or returning from a sleeping
+tab shows the correct step. A start request has a stable ID to avoid duplicates
+when a save is retried. Later changes to or deletion of a wheel do not alter
+activities that have already started. Spins themselves stay on the current device;
+saved wheels and activities are shared. Refresh the wheel list to see family edits.
+
+Apply migrations `0004_roulettes.sql` and `0005_activity_plans.sql` before deploying
+the API and frontend updates (`npm run db:local` for development;
+`npm run db:remote` for production).

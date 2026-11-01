@@ -178,9 +178,12 @@
         {#if e.activity}<ActivityCard event={e} plan={e.activity} {now} onremove={confirmDelete} />{:else}
         <article class="event-card" class:is-complete={e.timing.complete} style={`--event-color:${e.color}`}>
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native editor for the schedule selected with its browser edit button. The editor callback returns its native dialog completion Promise. -->
-          <div class="event-top"><div class="event-identity"><span class="event-emoji" aria-hidden="true">{e.emoji}</span><div><h3>{e.title}</h3><p class="event-meta"><span class="repeat-symbol" aria-hidden="true">{e.repeatUnit==='none' ? '◷' : '↻'}</span>{repeatLabel(e)}<span class="meta-dot">·</span><span class="event-target" title={`${dateLabel(e.timing.end,e.timeZone)} · ${e.timeZone}`}>{new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:e.timeZone}).format(e.timing.end)}</span></p><p class="event-creator">Added by {e.createdBy.username}</p></div></div><div class="event-actions"><div class="event-countdown"><strong>{e.timing.complete ? 'Arrived' : remainingText(e.timing.remaining)}</strong><span>{e.timing.complete ? 'You made it.' : e.timing.upcoming ? 'until it arrives · starts later' : 'until it arrives'}</span></div>{#if e.canEdit}<button class="edit-button" aria-label={`Edit ${e.title}`} title="Edit event" onclick={()=>openEditor(e)}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m12.5 4.5 3 3M3.5 16.5l3.7-.7L16 7a2.1 2.1 0 0 0-3-3L4.2 12.8l-.7 3.7Z"/></svg></button>{/if}</div></div>
-          <div class="progress-track" role="progressbar" aria-label={`${e.title}: elapsed time`} aria-valuenow={Math.round(e.timing.progress*10)/10} aria-valuemin="0" aria-valuemax="100" aria-valuetext={`${e.timing.progress.toFixed(1)} percent elapsed; ${remainingText(e.timing.remaining)} remaining`}><div class="progress-fill" style={`width:${e.timing.progress}%`}></div><span class="bar-tick one"></span><span class="bar-tick two"></span><span class="bar-tick three"></span></div>
-          <div class="progress-caption"><span>{e.timing.complete ? 'A moment worth keeping.' : e.timing.progress < 1 ? 'A fresh start.' : e.timing.progress > 90 ? 'Almost there.' : 'A little closer.'}</span><span><strong>{e.timing.progress.toFixed(1)}%</strong> of the way</span></div>
+          <div class="event-top"><div class="event-identity"><span class="event-emoji" aria-hidden="true">{e.emoji}</span><h3>{e.title}</h3></div>{#if e.canEdit}<button class="edit-button" aria-label={`Edit ${e.title}`} title="Edit event" onclick={()=>openEditor(e)}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m12.5 4.5 3 3M3.5 16.5l3.7-.7L16 7a2.1 2.1 0 0 0-3-3L4.2 12.8l-.7 3.7Z"/></svg></button>{/if}</div>
+          <div class="progress-track" role="progressbar" aria-label={`${e.title}: elapsed time`} aria-valuenow={Math.round(e.timing.progress*10)/10} aria-valuemin="0" aria-valuemax="100" aria-valuetext={`${e.timing.progress.toFixed(1)} percent elapsed; ${remainingText(e.timing.remaining)} remaining`}><div class="progress-fill" style={`width:${e.timing.progress}%`}></div></div>
+          <div class="event-bottom">
+            <details class="event-details"><summary>{repeatLabel(e)}</summary><p>{dateLabel(e.timing.end,e.timeZone)} · {e.timeZone}</p><p>Added by {e.createdBy.username}</p><p>{e.timing.progress.toFixed(1)}% elapsed</p></details>
+            <div class="event-countdown"><strong>{e.timing.complete ? 'Arrived' : `${remainingText(e.timing.remaining)} left`}</strong>{#if e.timing.upcoming}<span>Starts later</span>{/if}</div>
+          </div>
         </article>
         {/if}
       {/each}</div>{/if}
@@ -272,33 +275,24 @@
   .search input{border:0;background:none;font-size:12px;width:160px;outline-offset:3px;padding:8px 0;color:var(--ink);min-height:40px}
   .search input::placeholder{color:var(--text-muted)}
   .list-tools select{border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:8px 2px;cursor:pointer;min-height:40px}
-  .event-list{display:flex;flex-direction:column;gap:13px}
-  .event-card{padding:23px 25px 16px;border:1px solid var(--border);background:var(--surface);border-radius:20px;transition:border-color .2s;box-shadow:0 3px 14px var(--shadow-soft)}
-  .event-card:hover{border-color:var(--primary-border)}
-  .event-top{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:19px}
-  .event-identity{display:flex;gap:14px;align-items:center;min-width:0}
-  .event-emoji{width:43px;height:43px;flex-shrink:0;background:color-mix(in srgb,var(--event-color) 35%,var(--surface));border:1px solid color-mix(in srgb,var(--event-color) 60%,var(--surface));border-radius:14px;display:grid;place-items:center;font-size:23px}
-  .event-identity h3{font-size:15px;font-weight:700;letter-spacing:-.15px;margin:0 0 7px;overflow-wrap:anywhere}
-  .event-meta{font-size:9px;color:var(--text-muted);margin:0;display:flex;align-items:center;gap:5px}
-  .repeat-symbol{font-size:12px}
-  .meta-dot{margin:0 3px}
-  .event-actions{display:flex;align-items:center;gap:21px;flex-shrink:0}
-  .event-countdown{text-align:right;display:flex;flex-direction:column;gap:6px}
-  .event-countdown strong{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
-  .event-countdown>span{font-size:9px;color:var(--text-muted)}
-  .edit-button{width:27px;height:31px;display:grid;place-items:center;border:0;background:none;color:var(--text-secondary);border-radius:4px}
+  .event-list{display:flex;flex-direction:column;gap:28px;margin-top:22px}
+  .event-card{min-width:0}
+  .event-top{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px;margin-bottom:6px}
+  .event-identity{display:flex;gap:10px;align-items:baseline;min-width:0}
+  .event-emoji{flex-shrink:0;font-size:25px;line-height:1}
+  .event-identity h3{font-size:20px;line-height:1.4;font-weight:800;letter-spacing:-.2px;margin:0;overflow-wrap:anywhere}
+  .event-bottom{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-top:5px}
+  .event-details{flex:1;min-width:0;font-size:11px;line-height:1.6;color:var(--text-muted)}
+  .event-details summary{width:fit-content;max-width:100%;padding:4px 0;cursor:pointer;overflow-wrap:anywhere}
+  .event-details p{margin:6px 0 0;overflow-wrap:anywhere}
+  .event-countdown{text-align:right;display:flex;flex-direction:column;gap:3px;max-width:65%;padding-top:3px}
+  .event-countdown strong{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+  .event-countdown>span{font-size:11px;color:var(--text-muted)}
+  .edit-button{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border:0;background:none;color:var(--text-muted);border-radius:10px}
   .edit-button:hover{background:var(--surface-pink);color:var(--rose-ink)}
   .edit-button svg{width:16px;stroke:currentColor;stroke-width:1.3}
-  .progress-track{height:17px;background:var(--surface-soft);border-radius:999px;position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px var(--border)}
-  .progress-fill{height:100%;min-width:0;background:var(--event-color);border-radius:999px;transition:width 1s linear;position:relative;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--event-color) 80%,var(--ink))}
-  .progress-fill:after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(115deg,transparent,transparent 10px,#fff1 10px,#fff1 11px)}
-  .bar-tick{position:absolute;height:100%;top:0;width:1px;background:#fff7}
-  .bar-tick.one{left:25%}
-  .bar-tick.two{left:50%}
-  .bar-tick.three{left:75%}
-  .progress-caption{display:flex;justify-content:space-between;align-items:center;margin-top:10px;color:var(--text-muted);font-size:9px}
-  .progress-caption>span:first-child{font-family:var(--font-rounded);font-style:normal;font-size:11px}
-  .progress-caption strong{font-weight:700;color:var(--text-muted);font-variant-numeric:tabular-nums;margin-right:3px}
+  .progress-track{width:100%;height:44px;background:color-mix(in srgb,var(--border) 30%,var(--surface));border-radius:7px;overflow:hidden}
+  .progress-fill{height:100%;min-width:0;background:var(--event-color);transition:width 1s linear}
   .is-complete{opacity:.75}
   .list-footer{display:flex;justify-content:space-between;align-items:center;color:var(--text-muted);font-size:10px;margin-top:23px}
   .completed-toggle{display:flex;gap:7px;align-items:center;cursor:pointer}
@@ -362,8 +356,6 @@
   .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);border:1px solid var(--border);border-radius:16px;box-shadow:0 6px 25px var(--shadow-soft);background:var(--surface);padding:15px 22px;font-size:12px;display:flex;align-items:center;gap:10px;max-width:calc(100% - 30px);z-index:20;border-color:var(--pastel-green)}
   .toast>span{color:var(--green-ink)}
 
-  .event-creator{font-size:10px;color:var(--text-muted);margin:6px 0 0;overflow-wrap:anywhere}
-
   .family-button{border:1px solid var(--border);border-radius:12px;background:var(--pastel-green);padding:9px 14px;font-size:12px;color:var(--green-ink);border-color:var(--pastel-green);font-weight:700;min-height:40px}
   .family-button:hover{background:var(--pastel-lime)}
 
@@ -382,21 +374,10 @@
     .eyebrow{font-size:8px;letter-spacing:1.7px;margin-bottom:18px}
     h2{font-size:19px;letter-spacing:-.6px}
     .toolbar{flex-wrap:wrap;gap:10px;margin-bottom:14px}
-    .event-card{padding:17px 15px 14px;border-radius:18px}
-    .event-top{gap:10px;margin-bottom:16px}
-    .event-identity{gap:10px}
-    .event-emoji{width:35px;height:35px;font-size:20px;border-radius:9px}
-    .event-identity h3{font-size:13px;margin-bottom:6px}
-    .event-meta{font-size:8px;gap:4px;flex-wrap:wrap}
-    .meta-dot{margin:0}
-    .event-actions{gap:7px}
-    .event-countdown strong{font-size:12px;letter-spacing:-.2px}
-    .event-countdown>span{font-size:8px;max-width:90px;line-height:1.3}
-    .edit-button{width:20px;padding:0}
-    .edit-button svg{width:14px}
-    .progress-track{height:15px}
-    .progress-caption{font-size:8px}
-    .progress-caption>span:first-child{font-size:10px}
+    .event-list{gap:24px;margin-top:18px}
+    .event-emoji{font-size:23px}
+    .event-identity h3{font-size:18px}
+    .progress-track{height:40px}
     .list-footer{font-size:8px;gap:10px}
     .footer-separator{margin:0 6px}
     .completed-toggle{gap:5px;font-size:9px}
@@ -412,7 +393,6 @@
     .dialog-footer .secondary{padding:11px}
     .color-picker{gap:11px}
     .toast{font-size:11px;width:max-content;padding:13px 17px}
-    .event-target{display:none}
     .topbar{height:64px}
     .brand{font-size:18px;gap:8px}
     .header-right{gap:8px}

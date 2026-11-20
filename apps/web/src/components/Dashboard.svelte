@@ -219,50 +219,47 @@
           <h1 id="hub-heading">What shall we do today<span class="heading-dot">?</span></h1>
         </div>
 
-        <div class="tile-carousel" role="navigation" aria-label="Choose a feature">
-          <div class="tile-track">
-            <button type="button" class="feature-tile tile-timer" onclick={() => { activePage = 'timer'; }}>
-              <span class="tile-bubble" aria-hidden="true">⏱️</span>
-              <div class="tile-copy">
-                <h2>Quick timer</h2>
-                <p>5 min · 10 min · 30 min · 1 hr</p>
-              </div>
-              <span class="tile-pill" class:is-live={Object.values(activeTimers).length > 0}>
-                {Object.values(activeTimers).length
-                  ? `${Object.values(activeTimers).length} running`
-                  : 'Start →'}
-              </span>
-            </button>
+        <div class="tile-grid" role="navigation" aria-label="Choose a feature">
+          <button type="button" class="feature-tile tile-timer" onclick={() => { activePage = 'timer'; }}>
+            <span class="tile-bubble" aria-hidden="true">⏱️</span>
+            <div class="tile-copy">
+              <h2>Quick timer</h2>
+              <p>5 min · 10 min · 30 min · 1 hr</p>
+            </div>
+            <span class="tile-pill" class:is-live={Object.values(activeTimers).length > 0}>
+              {Object.values(activeTimers).length
+                ? `${Object.values(activeTimers).length} running`
+                : 'Start →'}
+            </span>
+          </button>
 
-            <button type="button" class="feature-tile tile-progress" onclick={() => { activePage = 'progress'; }}>
-              <span class="tile-bubble" aria-hidden="true">🌱</span>
-              <div class="tile-copy">
-                <h2>Progress</h2>
-                <p>Countdowns & repeating days</p>
-              </div>
-              <span class="tile-pill">
-                {loading
-                  ? '…'
-                  : Object.values(activeCountdowns).length
-                    ? `${Object.values(activeCountdowns).length} upcoming`
-                    : 'Open →'}
-              </span>
-            </button>
+          <button type="button" class="feature-tile tile-progress" onclick={() => { activePage = 'progress'; }}>
+            <span class="tile-bubble" aria-hidden="true">🌱</span>
+            <div class="tile-copy">
+              <h2>Progress</h2>
+              <p>Countdowns & repeating days</p>
+            </div>
+            <span class="tile-pill">
+              {loading
+                ? '…'
+                : Object.values(activeCountdowns).length
+                  ? `${Object.values(activeCountdowns).length} upcoming`
+                  : 'Open →'}
+            </span>
+          </button>
 
-            <button type="button" class="feature-tile tile-roulette" onclick={() => { activePage = 'roulette'; }}>
-              <span class="tile-bubble" aria-hidden="true">🎡</span>
-              <div class="tile-copy">
-                <h2>Roulette</h2>
-                <p>Spin & pick what to play</p>
-              </div>
-              <span class="tile-pill" class:is-live={Object.values(activeActivities).length > 0}>
-                {Object.values(activeActivities).length
-                  ? `${Object.values(activeActivities).length} playing`
-                  : 'Spin →'}
-              </span>
-            </button>
-          </div>
-          <p class="swipe-hint" aria-hidden="true">← Swipe tiles →</p>
+          <button type="button" class="feature-tile tile-roulette" onclick={() => { activePage = 'roulette'; }}>
+            <span class="tile-bubble" aria-hidden="true">🎡</span>
+            <div class="tile-copy">
+              <h2>Roulette</h2>
+              <p>Spin & pick what to play</p>
+            </div>
+            <span class="tile-pill" class:is-live={Object.values(activeActivities).length > 0}>
+              {Object.values(activeActivities).length
+                ? `${Object.values(activeActivities).length} playing`
+                : 'Spin →'}
+            </span>
+          </button>
         </div>
 
         {#if Object.values(activeTimers)[0]}
@@ -434,10 +431,8 @@
   .home-hub{height:calc(100dvh - 84px);max-height:640px;min-height:410px;display:flex;flex-direction:column;justify-content:space-between;gap:14px;padding:16px 0 12px;user-select:none}
   .hub-hero{text-align:center}
   .family-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 12px;border-radius:999px;background:var(--surface-soft);border:1px solid var(--border);color:var(--text-secondary);margin-bottom:8px}
-  .tile-carousel{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:0}
-  .tile-track{display:flex;gap:18px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:8px 6px;max-width:920px;width:100%;margin:0 auto;align-items:stretch}
-  .tile-track::-webkit-scrollbar{display:none}
-  .feature-tile{flex:1 0 250px;scroll-snap-align:center;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:14px;padding:24px 20px 20px;border-radius:28px;border:2px solid var(--border);background:var(--surface);box-shadow:0 8px 24px var(--shadow-soft);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+  .tile-grid{flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;max-width:920px;width:100%;margin:0 auto;align-content:center;min-height:0}
+  .feature-tile{text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:14px;padding:24px 20px 20px;border-radius:28px;border:2px solid var(--border);background:var(--surface);box-shadow:0 8px 24px var(--shadow-soft);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
   .feature-tile:hover{transform:translateY(-4px);box-shadow:0 14px 32px var(--shadow)}
   .tile-timer{background:var(--surface-pink);border-color:var(--pastel-pink)}
   .tile-timer:hover{border-color:var(--rose-ink)}
@@ -452,7 +447,6 @@
   .tile-copy p{font-size:12px;font-weight:600;color:var(--text-muted);margin:0;line-height:1.4}
   .tile-pill{font-size:12px;font-weight:800;padding:6px 16px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--ink)}
   .tile-pill.is-live{background:var(--pastel-green);border-color:var(--green-ink);color:var(--green-ink)}
-  .swipe-hint{font-size:11px;font-weight:700;color:var(--text-muted);text-align:center;margin:0}
 
   .live-dock{width:100%;max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-radius:999px;background:var(--surface);border:2px solid color-mix(in srgb,var(--dock-color) 85%,var(--border));box-shadow:0 6px 18px var(--shadow-soft)}
   .live-dock:hover{background:var(--surface-soft)}
@@ -580,7 +574,6 @@
   @media(min-width:1500px){.app-shell{max-width:1220px}
   }
   @media(max-width:950px){.app-shell{padding:0 34px}
-    .feature-tile{flex:0 0 240px}
     .toolbar{gap:10px}
     .list-tools{gap:5px}
     .search input{width:85px}
@@ -588,6 +581,12 @@
 
   @media(max-width:680px){
     .app-shell{padding:0 18px}
+    .tile-grid{grid-template-columns:1fr;gap:10px}
+    .feature-tile{flex-direction:row;text-align:left;padding:14px 16px;border-radius:22px;gap:14px}
+    .tile-bubble{width:48px;height:48px;border-radius:16px;font-size:24px;flex-shrink:0}
+    .tile-copy{flex:1;min-width:0}
+    .feature-tile h2{font-size:18px}
+    .tile-pill{flex-shrink:0;padding:5px 12px;font-size:11px}
     .brand-mark{width:28px;height:32px;font-size:17px}
     .eyebrow{font-size:8px;letter-spacing:1.7px;margin-bottom:12px}
     h2{font-size:19px;letter-spacing:-.6px}

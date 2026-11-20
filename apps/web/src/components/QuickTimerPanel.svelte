@@ -29,46 +29,87 @@
     onremove: (event: Readonly<ScheduleRecord>) => void;
   } = $props();
 
-  const firstPreset: Readonly<TimerPreset> = timerPresets[0] ?? { id: 'game', title: 'Game time', emoji: '🎮', color: palette[0] };
-  let selectedPresetId = $state(firstPreset.id);
-  let title = $state(firstPreset.title);
-  let emoji = $state(firstPreset.emoji);
-  let color = $state(firstPreset.color);
-  let customMinutes = $state(20);
-  let showCompleted = $state(false);
+  const presetList: Readonly<Record<number, TimerPreset>> = Object.fromEntries(
+    [
+      ...Object.values(timerPresets),
+      { id: 'custom', title: 'Custom', emoji: '✨', color: palette[0] },
+    ].entries(),
+  );
+  const presetCount = Object.values(presetList).length;
+  const durationList: Readonly<Record<number, number>> = timerDurations;
+  const durationCount = Object.values(durationList).length;
+
+  let step = $state<'activity' | 'duration' | 'running'>('activity');
+  let presetIndex = $state(0);
+  let durationIndex = $state(3); // Default to 30 min (index 3 in [5, 10, 15, 30, 45, 60])
+  let runningIndex = $state(0);
+  let customTitle = $state('My timer');
+  let customEmoji = $state('✨');
+  let customColor = $state(palette[0]);
+  let swipeStartX = $state<number | null>(null);
   let error = $state('');
+
+  const currentPreset: Readonly<TimerPreset> = $derived(
+    presetList[presetIndex] ?? { id: 'game', title: 'Game time', emoji: '🎮', color: palette[0] },
+  );
+  const activeTitle = $derived(currentPreset.id === 'custom' ? customTitle : currentPreset.title);
+  const activeEmoji = $derived(currentPreset.id === 'custom' ? customEmoji : currentPreset.emoji);
+  const activeColor = $derived(currentPreset.id === 'custom' ? customColor : currentPreset.color);
+  const currentDuration = $derived(durationList[durationIndex] ?? 30);
 
   const timerRows: Readonly<Record<number, TimedSchedule>> = $derived(
     Object.fromEntries(Object.values(events).filter(isQuickTimer).entries()),
   );
   const activeTimers: Readonly<Record<number, TimedSchedule>> = $derived(
-    Object.fromEntries(Object.values(timerRows).filter((e: TimedSchedule) => !e.timing.complete).entries()),
-  );
-  const completedCount = $derived(
-    Object.values(timerRows).filter((e: TimedSchedule) => e.timing.complete).length,
-  );
-  const visibleTimers: Readonly<Record<number, TimedSchedule>> = $derived(
     Object.fromEntries(
       Object.values(timerRows)
-        .filter((e: TimedSchedule) => showCompleted || !e.timing.complete)
+        .filter((e: TimedSchedule) => !e.timing.complete)
         .sort((a: TimedSchedule, b: TimedSchedule) => a.timing.end - b.timing.end)
         .entries(),
     ),
   );
+  const activeTimerCount = $derived(Object.values(activeTimers).length);
+  const safeRunningIndex = $derived(
+    activeTimerCount === 0 ? 0 : Math.min(runningIndex, activeTimerCount - 1),
+  );
+  const currentRunningTimer: TimedSchedule | undefined = $derived(activeTimers[safeRunningIndex]);
 
-  function selectPreset(preset: Readonly<TimerPreset>) {
-    selectedPresetId = preset.id;
-    title = preset.title;
-    emoji = preset.emoji;
-    color = preset.color;
+  function cyclePreset(delta: number) {
+    presetIndex = (presetIndex + delta + presetCount) % presetCount;
     error = '';
+  }
+
+  function cycleDuration(delta: number) {
+    durationIndex = (durationIndex + delta + durationCount) % durationCount;
+    error = '';
+  }
+
+  function cycleRunning(delta: number) {
+    runningIndex = activeTimerCount <= 1 ? 0 : (safeRunningIndex + delta + activeTimerCount) % activeTimerCount;
+  }
+
+  // eslint-disable-next-line functional/prefer-immutable-types -- Read the pointer X coordinate to begin a horizontal carousel swipe gesture.
+  function onPointerDown(event: PointerEvent) {
+    swipeStartX = event.clientX;
+  }
+
+  // eslint-disable-next-line functional/prefer-immutable-types -- Complete a horizontal swipe gesture to advance the active carousel item.
+  function onPointerUp(event: PointerEvent) {
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore pointer releases when no swipe gesture was started.
+    if (swipeStartX === null) return;
+    const dx = event.clientX - swipeStartX;
+    swipeStartX = null;
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore small taps below the horizontal swipe threshold.
+    if (Math.abs(dx) < 36) return;
+    const delta = dx < 0 ? 1 : -1;
+    void (step === 'activity' ? cyclePreset(delta) : step === 'duration' ? cycleDuration(delta) : cycleRunning(delta));
   }
 
   function startMinutes(minutes: number) {
     // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate clicks while a schedule write is already in flight.
     if (busy) return;
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
-    const built = buildQuickTimer({ title, emoji, color, minutes, timeZone: zone }, Date.now());
+    const built = buildQuickTimer({ title: activeTitle, emoji: activeEmoji, color: activeColor, minutes, timeZone: zone }, Date.now());
     // eslint-disable-next-line functional/no-conditional-statements -- Show validation feedback inline before issuing an API write.
     if ('error' in built) {
       error = built.error;
@@ -76,12 +117,8 @@
     }
     error = '';
     oncreate(built, `${built.emoji} ${built.title} (${timerDurationLabel(minutes)}) started!`);
-  }
-
-  // eslint-disable-next-line functional/prefer-immutable-types -- Handle the custom-minutes form submission and trigger the timer start callback.
-  function submitCustom(event: SubmitEvent) {
-    event.preventDefault();
-    startMinutes(Number(customMinutes));
+    step = 'running';
+    runningIndex = 0;
   }
 
   function addMinutes(item: TimedSchedule, extra: number) {
@@ -98,540 +135,610 @@
   }
 </script>
 
-<section class="timer-screen" aria-labelledby="timer-heading">
-  <div class="timer-header">
-    <div>
-      <p class="eyebrow">QUICK FAMILY TIMER</p>
-      <h1 id="timer-heading">What are we doing,<br class="mobile-break" /> and for how long<span class="heading-dot">?</span></h1>
-      <p class="subtitle">Pick an activity, then tap a time to start right away. Everyone in your family will see the countdown.</p>
+<!-- eslint-disable functional/functional-parameters -- Carousel controls and step pills update the reactive single-screen stage. -->
+<section class="game-timer-stage" aria-label="Quick family timer">
+  <div class="stage-topbar">
+    <div class="step-pills" role="tablist" aria-label="Timer steps">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={step === 'activity'}
+        class:active={step === 'activity'}
+        onclick={() => { step = 'activity'; }}
+      >1. Activity</button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={step === 'duration'}
+        class:active={step === 'duration'}
+        onclick={() => { step = 'duration'; }}
+      >2. Time</button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={step === 'running'}
+        class:active={step === 'running'}
+        onclick={() => { step = 'running'; }}
+      >
+        ⏱️ Live
+        {#if activeTimerCount}<span class="live-count">{activeTimerCount}</span>{/if}
+      </button>
     </div>
   </div>
 
-  <div class="composer-card" style={`--chosen-color:${color}`}>
-    <div class="step-block">
-      <div class="step-title">
-        <span class="step-badge">1</span>
-        <h2>What are we doing?</h2>
-      </div>
-      <!-- eslint-disable functional/functional-parameters -- Preset buttons update the current activity selection in the browser view. -->
-      <div class="preset-grid" role="group" aria-label="Choose an activity">
-        {#each Object.values(timerPresets) as preset (preset.id)}
-          <button
-            type="button"
-            class="preset-tile"
-            class:chosen={selectedPresetId === preset.id && title === preset.title && emoji === preset.emoji}
-            style={`--preset-color:${preset.color}`}
-            aria-pressed={selectedPresetId === preset.id && title === preset.title && emoji === preset.emoji}
-            disabled={busy}
-            onclick={() => selectPreset(preset)}
-          >
-            <span class="preset-emoji" aria-hidden="true">{preset.emoji}</span>
-            <span class="preset-name">{preset.title}</span>
-          </button>
-        {/each}
-      </div>
-      <!-- eslint-enable functional/functional-parameters -->
+  <!-- STEP 1: ACTIVITY CAROUSEL (1 card at a time, swipe or arrows) -->
+  {#if step === 'activity'}
+    <div
+      class="carousel-stage"
+      role="region"
+      aria-label="Activity carousel"
+      style={`--stage-color:${activeColor}`}
+      onpointerdown={onPointerDown}
+      onpointerup={onPointerUp}
+    >
+      <p class="stage-prompt">What are we doing?</p>
 
-      <div class="custom-activity">
-        <label class="emoji-field">
-          <span>Icon</span>
-          <input
-            class="emoji-input"
-            bind:value={emoji}
-            maxlength="16"
-            required
-            aria-label="Timer emoji"
-            disabled={busy}
-          />
-        </label>
-        <label class="title-field">
-          <span>Or type your own activity</span>
-          <input
-            bind:value={title}
-            maxlength="100"
-            required
-            placeholder="Game time, Piano, Clean up…"
-            aria-label="Activity name"
-            disabled={busy}
-          />
-        </label>
-        <!-- eslint-disable functional/functional-parameters -- Color swatch buttons update the selected bar color. -->
-        <div class="mini-swatches" role="group" aria-label="Timer color">
-          {#each Object.values(palette) as swatch (swatch)}
-            <button
-              type="button"
-              class="swatch"
-              class:selected={color === swatch}
-              style={`--swatch:${swatch}`}
-              aria-label={`Use color ${swatch}`}
-              aria-pressed={color === swatch}
-              disabled={busy}
-              onclick={() => { color = swatch; }}
-            >{color === swatch ? '✓' : ''}</button>
-          {/each}
+      <div class="carousel-row">
+        <button type="button" class="nav-arrow" aria-label="Previous activity" onclick={() => cyclePreset(-1)}>‹</button>
+
+        <div class="focus-card">
+          <span class="focus-emoji" aria-hidden="true">{activeEmoji}</span>
+          {#if currentPreset.id === 'custom'}
+            <div class="custom-inline">
+              <input
+                class="custom-emoji-input"
+                bind:value={customEmoji}
+                maxlength="16"
+                aria-label="Custom emoji"
+              />
+              <input
+                class="custom-title-input"
+                bind:value={customTitle}
+                maxlength="60"
+                placeholder="Activity name"
+                aria-label="Custom activity name"
+              />
+            </div>
+          {:else}
+            <h2 class="focus-title">{activeTitle}</h2>
+          {/if}
+          <span class="card-counter">{presetIndex + 1} / {presetCount} · Swipe or tap arrows</span>
         </div>
-        <!-- eslint-enable functional/functional-parameters -->
+
+        <button type="button" class="nav-arrow" aria-label="Next activity" onclick={() => cyclePreset(1)}>›</button>
       </div>
-    </div>
 
-    <div class="step-divider"></div>
-
-    <div class="step-block">
-      <div class="step-title">
-        <span class="step-badge">2</span>
-        <h2>How many minutes? <span class="ready-pill">{emoji} {title || 'Timer'}</span></h2>
-      </div>
-      <p class="step-hint">Tap a button below to start the timer immediately!</p>
-
-      <!-- eslint-disable functional/functional-parameters -- Duration buttons start a shared family timer immediately on tap. -->
-      <div class="duration-grid" role="group" aria-label="Start timer with preset duration">
-        {#each Object.values(timerDurations) as mins (mins)}
+      <div class="dot-strip" role="group" aria-label="Jump to activity">
+        {#each Object.values(presetList) as preset, idx (preset.id)}
           <button
             type="button"
-            class="duration-button"
-            disabled={busy || !title.trim()}
-            onclick={() => { void startMinutes(mins); }}
-          >
-            <span class="duration-main">{timerDurationLabel(mins)}</span>
-            <span class="duration-sub">Start now →</span>
-          </button>
+            class="emoji-dot"
+            class:chosen={presetIndex === idx}
+            aria-label={preset.title}
+            aria-pressed={presetIndex === idx}
+            onclick={() => { presetIndex = idx; }}
+          >{preset.emoji}</button>
         {/each}
       </div>
-      <!-- eslint-enable functional/functional-parameters -->
 
-      <form class="custom-duration" onsubmit={submitCustom}>
-        <label>
-          <span>Custom time (1–{MAX_TIMER_MINUTES} min)</span>
-          <div class="custom-duration-controls">
-            <input
-              type="number"
-              min="1"
-              max={MAX_TIMER_MINUTES}
-              step="1"
-              bind:value={customMinutes}
-              required
-              disabled={busy}
-              aria-label="Custom minutes"
-            />
-            <span class="unit-label">min</span>
-            <button type="submit" class="secondary-start" disabled={busy || !title.trim()}>
-              {busy ? 'Starting…' : `Start ${timerDurationLabel(Number(customMinutes) || 1)}`}
-            </button>
-          </div>
-        </label>
-      </form>
-
-      {#if error}
-        <p class="form-error" role="alert">{error}</p>
-      {/if}
-    </div>
-  </div>
-
-  <div class="running-section">
-    <div class="running-header">
-      <h3>
-        Running timers
-        <span class="count-pill">{Object.values(activeTimers).length}</span>
-      </h3>
-      {#if completedCount > 0}
-        <label class="completed-toggle">
-          <input type="checkbox" bind:checked={showCompleted} />
-          <span>Show finished ({completedCount})</span>
-        </label>
-      {/if}
+      <button
+        type="button"
+        class="big-action-btn"
+        disabled={!activeTitle.trim()}
+        onclick={() => { step = 'duration'; }}
+      >
+        Next: How many minutes? →
+      </button>
     </div>
 
-    {#if !Object.values(visibleTimers).length}
-      <div class="empty-timers">
-        <span class="empty-icon" aria-hidden="true">⏱️</span>
-        <h4>No timers running right now.</h4>
-        <p>Pick an activity above and tap <strong>5 min</strong>, <strong>10 min</strong>, <strong>30 min</strong>, or <strong>1 hr</strong> to begin!</p>
+  <!-- STEP 2: DURATION CAROUSEL (1 time at a time, swipe or arrows, 1 tap to start) -->
+  {:else if step === 'duration'}
+    <div
+      class="carousel-stage"
+      role="region"
+      aria-label="Duration carousel"
+      style={`--stage-color:${activeColor}`}
+      onpointerdown={onPointerDown}
+      onpointerup={onPointerUp}
+    >
+      <button type="button" class="selected-activity-chip" onclick={() => { step = 'activity'; }}>
+        <span>{activeEmoji} {activeTitle}</span>
+        <small>Change</small>
+      </button>
+
+      <p class="stage-prompt">How many minutes?</p>
+
+      <div class="carousel-row">
+        <button type="button" class="nav-arrow" aria-label="Shorter time" onclick={() => cycleDuration(-1)}>‹</button>
+
+        <div class="focus-card duration-focus-card">
+          <div class="focus-duration">{timerDurationLabel(currentDuration)}</div>
+          <span class="card-counter">Swipe or tap to pick · Max {MAX_TIMER_MINUTES} min</span>
+        </div>
+
+        <button type="button" class="nav-arrow" aria-label="Longer time" onclick={() => cycleDuration(1)}>›</button>
       </div>
-    {:else}
-      <div class="timer-list">
-        {#each Object.values(visibleTimers) as item (item.id)}
-          <article
-            class="timer-card"
-            class:is-complete={item.timing.complete}
-            style={`--timer-color:${item.color}`}
-          >
-            <div class="timer-card-top">
-              <div class="timer-identity">
-                <span class="timer-emoji" aria-hidden="true">{item.emoji}</span>
-                <div>
-                  <h4>{item.title}</h4>
-                  <span class="timer-meta">
-                    {timerDurationLabel(timerTotalMinutes(item))} timer · Started by {item.createdBy.username}
-                  </span>
-                </div>
-              </div>
-              <!-- eslint-disable functional/functional-parameters -- Timer action buttons extend or delete the selected timer. -->
-              <div class="timer-actions">
-                {#if item.canEdit}
+
+      <div class="dot-strip" role="group" aria-label="Quick duration choices">
+        {#each Object.values(durationList) as mins, idx (mins)}
+          <button
+            type="button"
+            class="time-dot"
+            class:chosen={durationIndex === idx}
+            aria-pressed={durationIndex === idx}
+            onclick={() => { durationIndex = idx; }}
+          >{timerDurationLabel(mins)}</button>
+        {/each}
+      </div>
+
+      {#if error}<p class="stage-error" role="alert">{error}</p>{/if}
+
+      <button
+        type="button"
+        class="big-action-btn start-now-btn"
+        disabled={busy || !activeTitle.trim()}
+        onclick={() => startMinutes(currentDuration)}
+      >
+        {busy ? 'Starting…' : `Start ${timerDurationLabel(currentDuration)} timer! ▶`}
+      </button>
+    </div>
+
+  <!-- STEP 3: LIVE RUNNING TIMERS CAROUSEL (1 card at a time, no vertical scroll) -->
+  {:else}
+    <div
+      class="carousel-stage"
+      role="region"
+      aria-label="Live running timers carousel"
+      style={`--stage-color:${currentRunningTimer?.color ?? activeColor}`}
+      onpointerdown={onPointerDown}
+      onpointerup={onPointerUp}
+    >
+      {#if !currentRunningTimer}
+        <div class="focus-card empty-live-card">
+          <span class="focus-emoji" aria-hidden="true">⏱️</span>
+          <h2 class="focus-title">No timers running</h2>
+          <p class="empty-copy">Pick an activity and time to start a shared family countdown!</p>
+        </div>
+        <button type="button" class="big-action-btn" onclick={() => { step = 'activity'; }}>
+          ＋ Set a timer
+        </button>
+      {:else}
+        <div class="carousel-row">
+          <button
+            type="button"
+            class="nav-arrow"
+            disabled={activeTimerCount <= 1}
+            aria-label="Previous running timer"
+            onclick={() => cycleRunning(-1)}
+          >‹</button>
+
+          <article class="focus-card live-timer-card">
+            <div class="live-top">
+              <span class="live-badge">{safeRunningIndex + 1} / {activeTimerCount}</span>
+              {#if currentRunningTimer.canEdit}
+                <div class="live-controls">
                   <button
                     type="button"
-                    class="extend-button"
+                    class="mini-extend"
                     disabled={busy}
-                    aria-label={`Add 5 minutes to ${item.title}`}
-                    onclick={() => { void addMinutes(item, 5); }}
+                    onclick={() => addMinutes(currentRunningTimer, 5)}
                   >+5 min</button>
                   <button
                     type="button"
-                    class="remove-button"
+                    class="mini-remove"
                     disabled={busy}
-                    aria-label={`Delete ${item.title} timer`}
-                    title="Delete timer"
-                    onclick={() => onremove(item)}
+                    aria-label={`Delete ${currentRunningTimer.title}`}
+                    onclick={() => onremove(currentRunningTimer)}
                   >×</button>
-                {/if}
-              </div>
-              <!-- eslint-enable functional/functional-parameters -->
+                </div>
+              {/if}
+            </div>
+
+            <div class="live-hero">
+              <span class="live-emoji" aria-hidden="true">{currentRunningTimer.emoji}</span>
+              <h2 class="focus-title">{currentRunningTimer.title}</h2>
+            </div>
+
+            <div class="live-countdown">
+              {remainingText(currentRunningTimer.timing.remaining)}
+              <small>left</small>
             </div>
 
             <div
-              class="progress-track"
+              class="live-track"
               role="progressbar"
-              aria-label={`${item.title}: elapsed time`}
-              aria-valuenow={Math.round(item.timing.progress * 10) / 10}
+              aria-label={`${currentRunningTimer.title}: elapsed time`}
+              aria-valuenow={Math.round(currentRunningTimer.timing.progress * 10) / 10}
               aria-valuemin="0"
               aria-valuemax="100"
-              aria-valuetext={`${remainingText(item.timing.remaining)} remaining`}
             >
-              <div class="progress-fill" style={`width:${item.timing.progress}%`}></div>
+              <div class="live-fill" style={`width:${currentRunningTimer.timing.progress}%`}></div>
             </div>
 
-            <div class="timer-card-bottom">
-              <span class="progress-label">
-                {item.timing.complete ? 'Finished!' : `${Math.round(item.timing.progress)}% done`}
-              </span>
-              <strong class="countdown-text" class:done-text={item.timing.complete}>
-                {item.timing.complete ? 'Time’s up! 🎉' : `${remainingText(item.timing.remaining)} left`}
-              </strong>
-            </div>
+            <span class="card-counter">
+              {timerDurationLabel(timerTotalMinutes(currentRunningTimer))} timer · Started by {currentRunningTimer.createdBy.username}
+            </span>
           </article>
-        {/each}
-      </div>
-    {/if}
-  </div>
+
+          <button
+            type="button"
+            class="nav-arrow"
+            disabled={activeTimerCount <= 1}
+            aria-label="Next running timer"
+            onclick={() => cycleRunning(1)}
+          >›</button>
+        </div>
+
+        {#if error}<p class="stage-error" role="alert">{error}</p>{/if}
+
+        <button type="button" class="big-action-btn secondary-stage-btn" onclick={() => { step = 'activity'; }}>
+          ＋ Start another timer
+        </button>
+      {/if}
+    </div>
+  {/if}
 </section>
+<!-- eslint-enable functional/functional-parameters -->
 
 <style>
-  .timer-screen { padding-top: 24px; }
-  .eyebrow { font-size: 10px; letter-spacing: 2px; font-weight: 700; color: var(--rose-ink); margin: 0 0 10px; }
-  h1 { font-size: 32px; line-height: 1.15; font-weight: 800; letter-spacing: -0.9px; margin: 0; }
-  .heading-dot { color: var(--rose-ink); }
-  .mobile-break { display: none; }
-  .subtitle { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin: 10px 0 0; }
-
-  .composer-card {
-    margin-top: 22px;
-    background: var(--surface);
-    border: 2px solid color-mix(in srgb, var(--chosen-color) 70%, var(--border));
-    border-radius: 24px;
-    padding: 26px;
-    box-shadow: 0 10px 30px var(--shadow-soft);
+  .game-timer-stage {
+    height: calc(100dvh - 110px);
+    max-height: 620px;
+    min-height: 410px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0 8px;
+    user-select: none;
   }
-  .step-block { display: flex; flex-direction: column; gap: 16px; }
-  .step-divider { height: 1px; background: var(--border); margin: 24px 0; }
-  .step-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .step-badge {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+
+  .stage-topbar {
+    display: flex;
+    justify-content: center;
+  }
+  .step-pills {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    padding: 4px;
+    border-radius: 999px;
+    box-shadow: 0 4px 12px var(--shadow-soft);
+  }
+  .step-pills button {
+    border: 0;
+    background: none;
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .step-pills button.active {
     background: var(--pastel-pink);
     color: var(--ink);
+  }
+  .live-count {
+    font-size: 10px;
+    background: var(--pastel-green);
+    color: var(--green-ink);
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  .carousel-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: color-mix(in srgb, var(--stage-color) 22%, var(--surface));
+    border: 2px solid color-mix(in srgb, var(--stage-color) 85%, var(--border));
+    border-radius: 32px;
+    padding: 20px 18px;
+    box-shadow: 0 12px 32px var(--shadow-soft);
+    touch-action: pan-y;
+  }
+
+  .stage-prompt {
+    font-size: 15px;
     font-weight: 800;
-    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  .selected-activity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .selected-activity-chip small {
+    color: var(--rose-ink);
+    font-size: 11px;
+  }
+
+  .carousel-row {
+    width: 100%;
+    max-width: 540px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .nav-arrow {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
     display: grid;
     place-items: center;
     flex-shrink: 0;
+    box-shadow: 0 4px 12px var(--shadow-soft);
+    transition: transform 0.12s ease;
   }
-  .step-title h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .ready-pill {
-    font-size: 13px;
-    font-weight: 700;
-    background: color-mix(in srgb, var(--chosen-color) 45%, var(--surface));
-    border: 1px solid color-mix(in srgb, var(--chosen-color) 80%, var(--border-strong));
-    padding: 4px 12px;
-    border-radius: 999px;
+  .nav-arrow:hover:not(:disabled) {
+    transform: scale(1.07);
+    background: var(--surface-pink);
   }
-  .step-hint { font-size: 12px; color: var(--text-muted); margin: -6px 0 0; }
+  .nav-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
 
-  .preset-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
-    gap: 10px;
-  }
-  .preset-tile {
+  .focus-card {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    max-height: 250px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 28px;
+    padding: 20px 18px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 16px 12px;
-    border-radius: 18px;
-    border: 2px solid var(--border);
-    background: color-mix(in srgb, var(--preset-color) 22%, var(--surface));
-    transition: transform 0.12s ease, border-color 0.15s ease, background 0.15s ease;
+    gap: 10px;
     text-align: center;
+    box-shadow: 0 8px 22px var(--shadow-soft);
   }
-  .preset-tile:hover {
-    transform: translateY(-2px);
-    background: color-mix(in srgb, var(--preset-color) 45%, var(--surface));
-  }
-  .preset-tile.chosen {
-    border-color: var(--rose-ink);
-    background: color-mix(in srgb, var(--preset-color) 65%, var(--surface));
-    box-shadow: 0 4px 14px var(--shadow-soft);
-  }
-  .preset-emoji { font-size: 30px; line-height: 1; }
-  .preset-name { font-size: 13px; font-weight: 800; color: var(--ink); }
 
-  .custom-activity {
-    display: grid;
-    grid-template-columns: 74px 1fr auto;
-    gap: 12px;
-    align-items: end;
-    background: var(--surface-soft);
-    padding: 14px;
-    border-radius: 16px;
+  .focus-emoji {
+    font-size: 62px;
+    line-height: 1;
   }
-  .custom-activity label {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  .focus-title {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .focus-duration {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .card-counter {
     font-size: 11px;
     font-weight: 700;
     color: var(--text-muted);
   }
-  .custom-activity input {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 11px;
-    padding: 10px 12px;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--ink);
-    width: 100%;
-  }
-  .emoji-input { text-align: center; font-size: 20px !important; padding: 7px !important; }
-  .mini-swatches { display: flex; align-items: center; gap: 7px; padding-bottom: 6px; flex-wrap: wrap; }
-  .swatch {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 1px solid color-mix(in srgb, var(--swatch) 60%, var(--ink));
-    background: var(--swatch);
-    font-size: 12px;
-    font-weight: 800;
-    display: grid;
-    place-items: center;
-    padding: 0;
-  }
-  .swatch.selected { outline: 2px solid var(--rose-ink); outline-offset: 2px; }
 
-  .duration-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-  }
-  .duration-button {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 18px 14px;
-    border-radius: 18px;
-    border: 2px solid color-mix(in srgb, var(--chosen-color) 85%, var(--border-strong));
-    background: color-mix(in srgb, var(--chosen-color) 55%, var(--surface));
-    transition: transform 0.12s ease, background 0.15s ease;
-  }
-  .duration-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    background: var(--chosen-color);
-  }
-  .duration-main { font-size: 24px; font-weight: 800; letter-spacing: -0.6px; color: var(--ink); }
-  .duration-sub { font-size: 11px; font-weight: 700; color: var(--text-secondary); }
-
-  .custom-duration {
-    background: var(--surface-soft);
-    padding: 12px 14px;
-    border-radius: 14px;
-  }
-  .custom-duration label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-muted);
-  }
-  .custom-duration-controls { display: flex; align-items: center; gap: 8px; }
-  .custom-duration-controls input {
-    width: 82px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 10px;
-    padding: 8px 10px;
-    font-size: 14px;
-    font-weight: 800;
-    color: var(--ink);
-  }
-  .unit-label { font-size: 12px; color: var(--text-muted); }
-  .secondary-start {
-    border: 1px solid var(--primary-border);
-    background: var(--primary);
-    color: var(--ink);
-    border-radius: 11px;
-    padding: 9px 14px;
-    font-size: 12px;
-    font-weight: 800;
-  }
-  .secondary-start:hover:not(:disabled) { background: var(--primary-hover); }
-
-  .form-error {
-    font-size: 12px;
-    color: var(--danger);
-    background: var(--danger-soft);
-    border: 1px solid var(--danger-border);
-    padding: 11px 14px;
-    border-radius: 10px;
-    margin: 0;
-  }
-
-  .running-section { margin-top: 32px; }
-  .running-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .running-header h3 {
-    font-size: 20px;
-    font-weight: 800;
-    margin: 0;
+  .custom-inline {
     display: flex;
     align-items: center;
     gap: 8px;
+    width: 100%;
+    max-width: 260px;
   }
-  .count-pill {
-    font-size: 12px;
-    background: var(--pastel-green);
-    color: var(--green-ink);
-    padding: 2px 9px;
-    border-radius: 999px;
+  .custom-emoji-input {
+    width: 52px;
+    text-align: center;
+    font-size: 20px;
+    padding: 8px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface-soft);
   }
-  .completed-toggle {
+  .custom-title-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 800;
+    padding: 9px 12px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface-soft);
+    color: var(--ink);
+  }
+
+  .dot-strip {
     display: flex;
     align-items: center;
-    gap: 7px;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .emoji-dot {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    font-size: 18px;
+    display: grid;
+    place-items: center;
+    transition: transform 0.12s ease;
+  }
+  .emoji-dot.chosen {
+    border-color: var(--rose-ink);
+    background: var(--pastel-pink);
+    transform: scale(1.1);
+  }
+
+  .time-dot {
+    padding: 7px 12px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
     font-size: 12px;
-    color: var(--text-muted);
-    cursor: pointer;
+    font-weight: 800;
+    color: var(--text-secondary);
   }
-  .completed-toggle input { accent-color: var(--rose-ink); }
+  .time-dot.chosen {
+    border-color: var(--rose-ink);
+    background: var(--stage-color);
+    color: var(--ink);
+    transform: scale(1.06);
+  }
 
-  .empty-timers {
-    text-align: center;
-    padding: 38px 20px;
-    border: 1px dashed var(--border-strong);
+  .big-action-btn {
+    width: 100%;
+    max-width: 380px;
+    padding: 15px 22px;
     border-radius: 20px;
-    background: var(--surface);
+    border: 2px solid var(--primary-border);
+    background: var(--primary);
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 800;
+    box-shadow: 0 6px 16px var(--shadow-soft);
+    transition: transform 0.12s ease, background 0.15s ease;
   }
-  .empty-icon { font-size: 32px; }
-  .empty-timers h4 { font-size: 18px; font-weight: 800; margin: 10px 0 6px; }
-  .empty-timers p { font-size: 13px; color: var(--text-muted); margin: 0; }
+  .big-action-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background: var(--primary-hover);
+  }
+  .start-now-btn {
+    background: var(--stage-color);
+    border-color: color-mix(in srgb, var(--stage-color) 70%, var(--ink));
+  }
+  .secondary-stage-btn {
+    background: var(--surface);
+    border-color: var(--border-strong);
+  }
 
-  .timer-list { display: flex; flex-direction: column; gap: 18px; }
-  .timer-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 18px 20px;
-    box-shadow: 0 4px 16px var(--shadow-soft);
+  .live-timer-card {
+    justify-content: space-between;
+    padding: 16px 18px;
   }
-  .timer-card.is-complete { opacity: 0.8; }
-  .timer-card-top {
+  .live-top {
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: 8px;
   }
-  .timer-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .timer-emoji { font-size: 28px; line-height: 1; flex-shrink: 0; }
-  .timer-identity h4 { font-size: 19px; font-weight: 800; margin: 0; overflow-wrap: anywhere; }
-  .timer-meta { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; }
-  .timer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  .extend-button {
-    border: 1px solid var(--border-strong);
-    background: var(--surface-soft);
-    border-radius: 10px;
-    padding: 6px 11px;
-    font-size: 12px;
+  .live-badge {
+    font-size: 11px;
     font-weight: 800;
-    color: var(--ink);
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
   }
-  .extend-button:hover:not(:disabled) { background: var(--pastel-lemon); }
-  .remove-button {
-    width: 36px;
-    height: 36px;
-    border: 0;
-    background: none;
-    color: var(--text-muted);
-    font-size: 22px;
+  .live-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mini-extend {
+    padding: 4px 10px;
     border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--pastel-lemon);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .mini-remove {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 0;
+    background: var(--surface-pink);
+    color: var(--rose-ink);
+    font-size: 18px;
+    line-height: 1;
     display: grid;
     place-items: center;
   }
-  .remove-button:hover:not(:disabled) { background: var(--surface-pink); color: var(--rose-ink); }
-
-  .progress-track {
-    width: 100%;
-    height: 38px;
-    background: color-mix(in srgb, var(--border) 35%, var(--surface));
-    border-radius: 10px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    background: var(--timer-color);
-    transition: width 1s linear;
-  }
-  .timer-card-bottom {
+  .live-hero {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 10px;
+    gap: 10px;
   }
-  .progress-label { font-size: 12px; color: var(--text-muted); font-weight: 700; }
-  .countdown-text {
-    font-size: 20px;
+  .live-emoji { font-size: 32px; line-height: 1; }
+  .live-countdown {
+    font-size: 36px;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.3px;
+    letter-spacing: -1px;
+    line-height: 1;
   }
-  .done-text { color: var(--green-ink); }
+  .live-countdown small {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-left: 4px;
+  }
+  .live-track {
+    width: 100%;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .live-fill {
+    height: 100%;
+    background: var(--stage-color);
+    transition: width 1s linear;
+  }
+  .empty-copy {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+  }
+  .stage-error {
+    font-size: 12px;
+    color: var(--danger);
+    margin: 0;
+  }
 
-  @media (max-width: 720px) {
-    h1 { font-size: 26px; }
-    .mobile-break { display: block; }
-    .composer-card { padding: 18px; }
-    .custom-activity { grid-template-columns: 64px 1fr; }
-    .mini-swatches { grid-column: 1 / -1; padding-bottom: 0; }
-    .preset-grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
-    .duration-grid { grid-template-columns: repeat(3, 1fr); }
-    .duration-main { font-size: 20px; }
-  }
-  @media (max-width: 440px) {
-    .duration-grid { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 600px) {
+    .game-timer-stage {
+      height: calc(100dvh - 96px);
+      padding: 8px 0;
+    }
+    .carousel-stage { padding: 14px 12px; border-radius: 26px; }
+    .nav-arrow { width: 40px; height: 40px; font-size: 22px; }
+    .focus-emoji { font-size: 48px; }
+    .focus-title { font-size: 21px; }
+    .focus-duration { font-size: 42px; }
+    .live-countdown { font-size: 28px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .progress-fill, .preset-tile, .duration-button { transition: none; }
+    .live-fill, .nav-arrow, .emoji-dot, .big-action-btn { transition: none; }
   }
 </style>

@@ -197,24 +197,11 @@
   <header class="topbar">
     <!-- eslint-disable-next-line functional/prefer-immutable-types -- Intercept the brand link click to return directly to the feature tile home screen. -->
     <a class="brand" href={BASE_PATH} aria-label="Little by little home" onclick={e => { e.preventDefault(); activePage = 'home'; }}><span class="brand-mark" aria-hidden="true">⌛</span><span>little by little<span class="brand-dot">.</span></span></a>
-    <!-- eslint-disable functional/functional-parameters -- Top navigation pills switch between the home hub and individual feature screens. -->
-    <nav class="space-switcher" aria-label="Features">
-      <button type="button" class:active={activePage === 'home'} aria-current={activePage === 'home' ? 'page' : undefined} onclick={() => { activePage = 'home'; }}>🏠 Home</button>
-      <button type="button" class:active={activePage === 'timer'} aria-current={activePage === 'timer' ? 'page' : undefined} onclick={() => { activePage = 'timer'; }}>
-        ⏱️ Timer
-        {#if Object.values(activeTimers).length}<span class="nav-count">{Object.values(activeTimers).length}</span>{/if}
-      </button>
-      <button type="button" class:active={activePage === 'progress'} aria-current={activePage === 'progress' ? 'page' : undefined} onclick={() => { activePage = 'progress'; }}>
-        🌱 Progress
-        {#if Object.values(activeCountdowns).length}<span class="nav-count">{Object.values(activeCountdowns).length}</span>{/if}
-      </button>
-      <button type="button" class:active={activePage === 'roulette'} aria-current={activePage === 'roulette' ? 'page' : undefined} onclick={() => { activePage = 'roulette'; }}>
-        🎡 Roulette
-        {#if Object.values(activeActivities).length}<span class="nav-count">{Object.values(activeActivities).length}</span>{/if}
-      </button>
-    </nav>
-    <!-- eslint-enable functional/functional-parameters -->
     <nav class="header-right" aria-label="Your space">
+      {#if activePage !== 'home'}
+        <!-- eslint-disable-next-line functional/functional-parameters -- Header pill returns directly to the home tile hub. -->
+        <button type="button" class="home-pill" onclick={() => { activePage = 'home'; }}>← Home</button>
+      {/if}
       <button class="family-button" onclick={onfamily}>Family</button>
       <!-- eslint-disable-next-line functional/functional-parameters -- Open settings without leaving the current event list or changing its filters. -->
       <button class="settings-button" aria-label="Settings" aria-haspopup="dialog" onclick={() => { settingsOpen = true; }}><svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="5" r="2"/><circle cx="13" cy="10" r="2"/><circle cx="7" cy="15" r="2"/></svg><span>Settings</span></button>
@@ -228,115 +215,92 @@
       <!-- eslint-disable functional/functional-parameters -- Home feature tiles open the selected feature screen. -->
       <section class="home-hub" aria-labelledby="hub-heading">
         <div class="hub-hero">
-          <p class="eyebrow">FAMILY TIME HUB · {identity.family.name.toUpperCase()}</p>
+          <span class="family-tag">{identity.family.name}</span>
           <h1 id="hub-heading">What shall we do today<span class="heading-dot">?</span></h1>
-          <p class="hub-subtitle">Pick a tile to start a quick play timer, check your family’s countdowns, or spin a roulette wheel together.</p>
         </div>
 
-        <div class="tile-grid" role="navigation" aria-label="Choose a feature">
-          <button type="button" class="feature-tile tile-timer" onclick={() => { activePage = 'timer'; }}>
-            <div class="tile-top">
-              <span class="tile-icon" aria-hidden="true">⏱️</span>
-              <span class="tile-badge">
+        <div class="tile-carousel" role="navigation" aria-label="Choose a feature">
+          <div class="tile-track">
+            <button type="button" class="feature-tile tile-timer" onclick={() => { activePage = 'timer'; }}>
+              <span class="tile-bubble" aria-hidden="true">⏱️</span>
+              <div class="tile-copy">
+                <h2>Quick timer</h2>
+                <p>5 min · 10 min · 30 min · 1 hr</p>
+              </div>
+              <span class="tile-pill" class:is-live={Object.values(activeTimers).length > 0}>
                 {Object.values(activeTimers).length
-                  ? `${Object.values(activeTimers).length} running now`
-                  : '5 min · 10 min · 30 min · 1 hr'}
+                  ? `${Object.values(activeTimers).length} running`
+                  : 'Start →'}
               </span>
-            </div>
-            <h2>Quick timer</h2>
-            <p class="tile-story">“I want to play games!” → “How many minutes?” → “30 min!”</p>
-            <p class="tile-desc">Pick an icon and tap a time button to start a shared family countdown in two taps.</p>
-            <div class="tile-chips" aria-hidden="true">
-              <span>🎮 5 min</span>
-              <span>📺 10 min</span>
-              <span>📖 30 min</span>
-              <span>🎨 1 hr</span>
-            </div>
-            <span class="tile-cta">Open Quick timer →</span>
-          </button>
+            </button>
 
-          <button type="button" class="feature-tile tile-progress" onclick={() => { activePage = 'progress'; }}>
-            <div class="tile-top">
-              <span class="tile-icon" aria-hidden="true">🌱</span>
-              <span class="tile-badge">
+            <button type="button" class="feature-tile tile-progress" onclick={() => { activePage = 'progress'; }}>
+              <span class="tile-bubble" aria-hidden="true">🌱</span>
+              <div class="tile-copy">
+                <h2>Progress</h2>
+                <p>Countdowns & repeating days</p>
+              </div>
+              <span class="tile-pill">
                 {loading
-                  ? 'Loading…'
-                  : `${Object.values(active).length} active · ${repeatingCount} repeating`}
+                  ? '…'
+                  : Object.values(activeCountdowns).length
+                    ? `${Object.values(activeCountdowns).length} upcoming`
+                    : 'Open →'}
               </span>
-            </div>
-            <h2>Progress</h2>
-            <p class="tile-story">Your time, in progress.</p>
-            <p class="tile-desc">Live progress bars for birthdays, trips, weekends, and repeating family routines.</p>
-            <div class="tile-chips" aria-hidden="true">
-              <span>🎂 Birthdays</span>
-              <span>🌿 Weekends</span>
-              <span>✈️ Trips</span>
-            </div>
-            <span class="tile-cta">Open Progress →</span>
-          </button>
+            </button>
 
-          <button type="button" class="feature-tile tile-roulette" onclick={() => { activePage = 'roulette'; }}>
-            <div class="tile-top">
-              <span class="tile-icon" aria-hidden="true">🎡</span>
-              <span class="tile-badge">
+            <button type="button" class="feature-tile tile-roulette" onclick={() => { activePage = 'roulette'; }}>
+              <span class="tile-bubble" aria-hidden="true">🎡</span>
+              <div class="tile-copy">
+                <h2>Roulette</h2>
+                <p>Spin & pick what to play</p>
+              </div>
+              <span class="tile-pill" class:is-live={Object.values(activeActivities).length > 0}>
                 {Object.values(activeActivities).length
-                  ? `${Object.values(activeActivities).length} playtime active`
-                  : 'Spin & play'}
+                  ? `${Object.values(activeActivities).length} playing`
+                  : 'Spin →'}
               </span>
-            </div>
-            <h2>Family roulettes</h2>
-            <p class="tile-story">Not sure what to play? Let the wheel decide!</p>
-            <p class="tile-desc">Spin a shared wheel of fun choices, with an optional clean-up task afterward.</p>
-            <div class="tile-chips" aria-hidden="true">
-              <span>🎨 Drawing</span>
-              <span>🧱 LEGO</span>
-              <span>🧹 Clean up</span>
-            </div>
-            <span class="tile-cta">Open Roulettes →</span>
-          </button>
+            </button>
+          </div>
+          <p class="swipe-hint" aria-hidden="true">← Swipe tiles →</p>
         </div>
 
-        {#if Object.values(activeTimers).length || Object.values(activeActivities).length}
-          <div class="happening-now">
-            <div class="happening-header">
-              <h3><span class="pulse-dot" aria-hidden="true"></span> Happening right now</h3>
-              <button type="button" class="text-link" onclick={() => { activePage = Object.values(activeTimers).length ? 'timer' : 'roulette'; }}>
-                Manage →
-              </button>
+        {#if Object.values(activeTimers)[0]}
+          {@const liveTimer = Object.values(activeTimers)[0]}
+          <button type="button" class="live-dock" style={`--dock-color:${liveTimer.color}`} onclick={() => { activePage = 'timer'; }}>
+            <div class="dock-left">
+              <span class="pulse-dot" aria-hidden="true"></span>
+              <span class="dock-emoji" aria-hidden="true">{liveTimer.emoji}</span>
+              <strong>{liveTimer.title}</strong>
+              <span class="timer-pill">{timerDurationLabel(timerTotalMinutes(liveTimer))}</span>
             </div>
-            <div class="event-list">
-              {#each Object.values(activeTimers) as item (item.id)}
-                <article class="event-card" style={`--event-color:${item.color}`}>
-                  <div class="event-top">
-                    <div class="event-identity">
-                      <span class="event-emoji" aria-hidden="true">{item.emoji}</span>
-                      <h3>{item.title}</h3>
-                      <span class="timer-pill">{timerDurationLabel(timerTotalMinutes(item))}</span>
-                    </div>
-                    <button type="button" class="secondary small-btn" onclick={() => { activePage = 'timer'; }}>Open timer</button>
-                  </div>
-                  <div class="progress-track" role="progressbar" aria-label={`${item.title}: elapsed time`} aria-valuenow={Math.round(item.timing.progress * 10) / 10} aria-valuemin="0" aria-valuemax="100">
-                    <div class="progress-fill" style={`width:${item.timing.progress}%`}></div>
-                  </div>
-                  <div class="event-bottom">
-                    <span class="started-by">Started by {item.createdBy.username}</span>
-                    <div class="event-countdown"><strong>{remainingText(item.timing.remaining)} left</strong></div>
-                  </div>
-                </article>
-              {/each}
-              {#each Object.values(activeActivities) as item (item.id)}
-                {#if item.activity}
-                  <ActivityCard event={item} plan={item.activity} {now} onremove={confirmDelete} />
-                {/if}
-              {/each}
+            <div class="dock-right">
+              <span class="dock-remaining">{remainingText(liveTimer.timing.remaining)} left</span>
+              <span class="dock-arrow" aria-hidden="true">→</span>
             </div>
+          </button>
+        {:else if Object.values(activeActivities)[0]}
+          {@const liveAct = Object.values(activeActivities)[0]}
+          <button type="button" class="live-dock" style="--dock-color:var(--pastel-green)" onclick={() => { activePage = 'roulette'; }}>
+            <div class="dock-left">
+              <span class="pulse-dot" aria-hidden="true"></span>
+              <span class="dock-emoji" aria-hidden="true">🎉</span>
+              <strong>{liveAct.title}</strong>
+            </div>
+            <div class="dock-right">
+              <span class="dock-remaining">{remainingText(liveAct.timing.remaining)} left</span>
+              <span class="dock-arrow" aria-hidden="true">→</span>
+            </div>
+          </button>
+        {:else}
+          <div class="quiet-dock">
+            <span aria-hidden="true">✳</span>
+            <span>Tap a tile above to begin</span>
           </div>
         {/if}
       </section>
       <!-- eslint-enable functional/functional-parameters -->
     {:else if activePage === 'timer'}
-      <!-- eslint-disable-next-line functional/functional-parameters -- Back link returns to the feature tile home screen. -->
-      <div class="back-bar"><button type="button" class="back-home" onclick={() => { activePage = 'home'; }}>← Back to home tiles</button></div>
       <QuickTimerPanel
         events={rows}
         busy={saving}
@@ -345,8 +309,6 @@
         onremove={confirmDelete}
       />
     {:else if activePage === 'roulette'}
-      <!-- eslint-disable-next-line functional/functional-parameters -- Back link returns to the feature tile home screen. -->
-      <div class="back-bar"><button type="button" class="back-home" onclick={() => { activePage = 'home'; }}>← Back to home tiles</button></div>
       <section class="roulette-page" aria-labelledby="roulette-page-heading">
         <div class="section-heading">
           <div>
@@ -372,8 +334,6 @@
         {/if}
       </section>
     {:else}
-      <!-- eslint-disable-next-line functional/functional-parameters -- Back link returns to the feature tile home screen. -->
-      <div class="back-bar"><button type="button" class="back-home" onclick={() => { activePage = 'home'; }}>← Back to home tiles</button></div>
       <section class="events-section" aria-labelledby="events-heading">
   <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the browser Add event button. The editor callback returns its native dialog completion Promise. -->
         <div class="section-heading"><div><h1 id="events-heading">Your time,<br class="mobile-break"/> in progress<span class="heading-dot">.</span></h1><p class="event-summary" aria-label="Schedule overview">{#if loading}Your family’s shared moments{:else}<span><strong>{Object.values(active).length}</strong> upcoming</span><span class="summary-dot" aria-hidden="true">·</span><span><strong>{repeatingCount}</strong> repeating</span>{/if}</p></div><div class="add-actions"><button class="secondary" onclick={()=>{ activePage = 'timer'; }}>⏱️ Quick timer</button><button class="secondary" onclick={()=>openEditor(null, 'roulette')}>Family roulettes ↻</button><button class="primary add-button" onclick={()=>openEditor()}><span aria-hidden="true">＋</span> Add event</button></div></div>
@@ -400,9 +360,13 @@
         <div class="list-footer"><label class="completed-toggle"><input type="checkbox" bind:checked={showCompleted}/><span>Show completed{completed ? ` (${completed})` : ''}</span></label><span>{Object.values(visible).length} {Object.values(visible).length===1 ? 'event' : 'events'}<span class="footer-separator">·</span>Updated every second</span></div>
       </section>
     {/if}
-    <div class="closing-note"><span aria-hidden="true">✳</span><p>{next ? 'There’s always something to look forward to.' : 'A little space for the things that matter.'}</p><span class="note-line"></span></div>
+    {#if activePage === 'progress' || activePage === 'roulette'}
+      <div class="closing-note"><span aria-hidden="true">✳</span><p>{next ? 'There’s always something to look forward to.' : 'A little space for the things that matter.'}</p><span class="note-line"></span></div>
+    {/if}
   </main>
-  <footer class="site-footer"><span>little by little<span class="brand-dot">.</span></span><span>Good things take time.</span></footer>
+  {#if activePage === 'progress' || activePage === 'roulette'}
+    <footer class="site-footer"><span>little by little<span class="brand-dot">.</span></span><span>Good things take time.</span></footer>
+  {/if}
 </div>
 
 {#if settingsOpen}
@@ -464,46 +428,42 @@
   .brand-dot{color:var(--rose-ink)}
   .header-right{display:flex;align-items:center;gap:10px}
 
-  .space-switcher{display:flex;align-items:center;gap:4px;background:var(--surface-soft);border:1px solid var(--border);padding:4px;border-radius:14px}
-  .space-switcher button{border:0;background:none;padding:7px 12px;border-radius:10px;font-size:12px;font-weight:800;color:var(--text-muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
-  .space-switcher button:hover{color:var(--ink);background:var(--surface)}
-  .space-switcher button.active{background:var(--pastel-pink);color:var(--ink);box-shadow:0 1px 3px var(--shadow-soft)}
-  .nav-count{font-size:10px;background:var(--surface);padding:1px 6px;border-radius:999px;color:var(--ink)}
+  .home-pill{border:1px solid var(--primary-border);border-radius:12px;background:var(--surface-pink);padding:9px 14px;font-size:12px;font-weight:800;color:var(--rose-ink);min-height:40px}
+  .home-pill:hover{background:var(--pastel-pink);color:var(--ink)}
 
-  .back-bar{padding-top:18px}
-  .back-home{border:1px solid var(--border);background:var(--surface);border-radius:11px;padding:7px 13px;font-size:12px;font-weight:700;color:var(--text-secondary)}
-  .back-home:hover{background:var(--surface-pink);color:var(--ink)}
-
-  .home-hub{padding-top:32px}
-  .hub-hero{max-width:680px;margin-bottom:26px}
-  .hub-subtitle{font-size:14px;color:var(--text-muted);line-height:1.65;margin:10px 0 0}
-  .tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
-  .feature-tile{text-align:left;display:flex;flex-direction:column;justify-content:space-between;gap:12px;padding:24px;border-radius:24px;border:2px solid var(--border);background:var(--surface);box-shadow:0 10px 26px var(--shadow-soft);transition:transform .14s ease,border-color .15s ease,box-shadow .15s ease}
-  .feature-tile:hover{transform:translateY(-3px);box-shadow:0 14px 34px var(--shadow)}
-  .tile-timer{background:linear-gradient(160deg,var(--surface) 45%,var(--surface-pink));border-color:var(--pastel-pink)}
+  .home-hub{height:calc(100dvh - 84px);max-height:640px;min-height:410px;display:flex;flex-direction:column;justify-content:space-between;gap:14px;padding:16px 0 12px;user-select:none}
+  .hub-hero{text-align:center}
+  .family-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 12px;border-radius:999px;background:var(--surface-soft);border:1px solid var(--border);color:var(--text-secondary);margin-bottom:8px}
+  .tile-carousel{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:0}
+  .tile-track{display:flex;gap:18px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:8px 6px;max-width:920px;width:100%;margin:0 auto;align-items:stretch}
+  .tile-track::-webkit-scrollbar{display:none}
+  .feature-tile{flex:1 0 250px;scroll-snap-align:center;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:14px;padding:24px 20px 20px;border-radius:28px;border:2px solid var(--border);background:var(--surface);box-shadow:0 8px 24px var(--shadow-soft);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+  .feature-tile:hover{transform:translateY(-4px);box-shadow:0 14px 32px var(--shadow)}
+  .tile-timer{background:var(--surface-pink);border-color:var(--pastel-pink)}
   .tile-timer:hover{border-color:var(--rose-ink)}
-  .tile-progress{background:linear-gradient(160deg,var(--surface) 45%,var(--surface-soft));border-color:var(--pastel-apricot)}
+  .tile-progress{background:var(--surface-soft);border-color:var(--pastel-apricot)}
   .tile-progress:hover{border-color:var(--border-strong)}
-  .tile-roulette{background:linear-gradient(160deg,var(--surface) 45%,var(--surface-green));border-color:var(--pastel-green)}
+  .tile-roulette{background:var(--surface-green);border-color:var(--pastel-green)}
   .tile-roulette:hover{border-color:var(--green-ink)}
-  .tile-top{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%}
-  .tile-icon{width:52px;height:52px;border-radius:16px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;font-size:28px;box-shadow:0 4px 10px var(--shadow-soft)}
-  .tile-badge{font-size:11px;font-weight:800;padding:5px 11px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)}
-  .feature-tile h2{font-size:24px;font-weight:800;letter-spacing:-.6px;margin:4px 0 0}
-  .tile-story{font-size:13px;font-weight:800;color:var(--rose-ink);margin:0;line-height:1.45}
-  .tile-roulette .tile-story{color:var(--green-ink)}
-  .tile-desc{font-size:12px;color:var(--text-muted);line-height:1.65;margin:0;flex:1}
-  .tile-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .tile-chips span{font-size:11px;font-weight:700;padding:4px 9px;border-radius:9px;background:var(--surface);border:1px solid var(--border);color:var(--ink)}
-  .tile-cta{font-size:12px;font-weight:800;color:var(--ink);margin-top:6px;display:inline-flex;align-items:center;gap:6px}
+  .tile-bubble{width:64px;height:64px;border-radius:22px;background:var(--surface);border:1.5px solid var(--border);display:grid;place-items:center;font-size:32px;box-shadow:0 6px 16px var(--shadow-soft);transition:transform .18s ease}
+  .feature-tile:hover .tile-bubble{transform:scale(1.06) rotate(-5deg)}
+  .tile-copy{display:flex;flex-direction:column;gap:4px}
+  .feature-tile h2{font-size:22px;font-weight:800;letter-spacing:-.5px;margin:0}
+  .tile-copy p{font-size:12px;font-weight:600;color:var(--text-muted);margin:0;line-height:1.4}
+  .tile-pill{font-size:12px;font-weight:800;padding:6px 16px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--ink)}
+  .tile-pill.is-live{background:var(--pastel-green);border-color:var(--green-ink);color:var(--green-ink)}
+  .swipe-hint{font-size:11px;font-weight:700;color:var(--text-muted);text-align:center;margin:0}
 
-  .happening-now{margin-top:34px;padding:24px;border-radius:24px;background:var(--surface);border:1px solid var(--border)}
-  .happening-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
-  .happening-header h3{font-size:18px;font-weight:800;margin:0;display:flex;align-items:center;gap:9px}
-  .pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--green-ink);display:inline-block}
-  .text-link{border:0;background:none;font-size:12px;font-weight:800;color:var(--rose-ink)}
-  .small-btn{padding:7px 11px;font-size:11px;font-weight:700}
-  .started-by{font-size:11px;color:var(--text-muted)}
+  .live-dock{width:100%;max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-radius:999px;background:var(--surface);border:2px solid color-mix(in srgb,var(--dock-color) 85%,var(--border));box-shadow:0 6px 18px var(--shadow-soft)}
+  .live-dock:hover{background:var(--surface-soft)}
+  .dock-left{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}
+  .dock-left strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dock-emoji{font-size:18px;line-height:1}
+  .dock-right{display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+  .dock-arrow{color:var(--rose-ink)}
+  .quiet-dock{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;font-weight:700;color:var(--text-muted);padding:8px 0}
+  .quiet-dock>span:first-child{color:var(--rose-ink)}
+  .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green-ink);display:inline-block;flex-shrink:0}
   .timer-pill{font-size:11px;font-weight:800;background:var(--surface-soft);border:1px solid var(--border);padding:2px 8px;border-radius:999px;color:var(--text-secondary)}
 
   .roulette-page{padding-top:24px}
@@ -620,7 +580,7 @@
   @media(min-width:1500px){.app-shell{max-width:1220px}
   }
   @media(max-width:950px){.app-shell{padding:0 34px}
-    .tile-grid{grid-template-columns:1fr}
+    .feature-tile{flex:0 0 240px}
     .toolbar{gap:10px}
     .list-tools{gap:5px}
     .search input{width:85px}
@@ -629,8 +589,6 @@
   @media(max-width:680px){
     .app-shell{padding:0 18px}
     .brand-mark{width:28px;height:32px;font-size:17px}
-    .space-switcher{order:3;width:100%;justify-content:space-between}
-    .space-switcher button{flex:1;justify-content:center;padding:7px 6px;font-size:11px}
     .eyebrow{font-size:8px;letter-spacing:1.7px;margin-bottom:12px}
     h2{font-size:19px;letter-spacing:-.6px}
     .toolbar{flex-wrap:wrap;gap:10px;margin-bottom:14px}

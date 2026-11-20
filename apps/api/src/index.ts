@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { auth } from './auth';
 import { events } from './events';
+import { mascot } from './mascot';
 import { push } from './push';
 import { runPushReminders } from './push-scheduler';
 import { roulettes } from './roulettes';
@@ -75,6 +76,8 @@ app.post('/api/family/members',requireAuth,async c=>{
 app.route('/api/schedules',events);
 // eslint-disable-next-line functional/no-expression-statements -- Mount the authenticated family roulette router.
 app.route('/api/roulettes',roulettes);
+// eslint-disable-next-line functional/no-expression-statements -- Mount the per-user mascot companion router.
+app.route('/api/mascot',mascot);
 // Retain the old route while existing browser bundles refresh.
 // eslint-disable-next-line functional/no-expression-statements -- Mount the legacy schedule HTTP alias on the Hono router.
 app.route('/api/events',events);

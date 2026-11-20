@@ -1,8 +1,18 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { sort as sortRows, sortBy } from 'ramda';
+  import { always, sort as sortRows, sortBy } from 'ramda';
   import { cycle, remainingText, repeatLabel, palette, units, shift, toLocal, fromLocal, starterEvents, type EventInput, type RepeatUnit } from '@little/shared/events';
   import { isQuickTimer, timerDurationLabel, timerTotalMinutes } from '@little/shared/timer';
+  import {
+    computeMascotFatigue,
+    localDayKey,
+    localFractionalHour,
+    MAX_MASCOT_GOALS,
+    type MascotGoal,
+    type MascotProfile,
+    type MascotStatePayload,
+    type SpringFeel,
+  } from '@little/shared/mascot';
 
   import type { Identity, ScheduleRecord } from '@little/shared/api';
   import { api, BASE_PATH } from '../lib/api';
@@ -10,6 +20,7 @@
   import ActivityCard from './ActivityCard.svelte';
   import RouletteLibrary from './RouletteLibrary.svelte';
   import QuickTimerPanel from './QuickTimerPanel.svelte';
+  import PetalMascot from './PetalMascot.svelte';
   type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
   type FeaturePage = 'home' | 'timer' | 'progress' | 'roulette';
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
@@ -48,6 +59,22 @@
   // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native timer handle so the browser toast can be cancelled.
   let toastTimer: ReturnType<typeof setTimeout>;
   let seeding = $state(false);
+
+  // Mascot companion & daily goals state
+  const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
+  let mascot = $state<MascotStatePayload | null>(null);
+  let mascotBusy = $state(false);
+  let celebrateNonce = $state(0);
+  let celebrateMessage = $state('');
+  let restNonce = $state(0);
+  let editingGoals = $state(false);
+  let newGoalTitle = $state('');
+  let newGoalEmoji = $state('🌟');
+  let newGoalKind = $state<'effort' | 'rest'>('effort');
+  let newGoalColor = $state('#f8daae');
+  let goalError = $state('');
+  let claimingEvents: Readonly<Record<string, boolean>> = {};
+
   const emojis: Readonly<Record<number, string>> = Object.fromEntries(['✨','🎯','🌿','☀️','🌙','🎉','🎂','✈️','📚','💻','🏃','☕','❤️','☘️','⏱️','🏖️'].entries());
   const timeZones: Readonly<Record<number, string>> = Object.fromEntries([...new Set(['Asia/Tokyo', Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC', ...Intl.supportedValuesOf('timeZone')])].entries());
   const rows: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(events.map((e:Readonly<ScheduleRecord>): EventRow=>({...e, timing:cycle(e,now)})).entries()));
@@ -66,14 +93,161 @@
   const next = $derived(sortBy((event: EventRow)=>event.timing.end,Object.values(active))[0]);
   const clockDate = $derived(new Intl.DateTimeFormat('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'Asia/Tokyo'}).format(now));
   const clockTime = $derived(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Tokyo'}).format(now));
+  const mascotProfile = $derived<MascotProfile>(mascot?.profile ?? {
+    xp: 0,
+    streak: 0,
+    lastActiveDay: null,
+    dayKey: localDayKey(now, browserZone),
+    effortPoints: 0,
+    restPoints: 0,
+    napping: false,
+    springFeel: 'plush',
+    timeZone: browserZone,
+  });
+  const mascotGoals = $derived<Readonly<ArrayLike<MascotGoal>>>(mascot?.goals ?? []);
+  const mascotGoalsDone = $derived(Array.from(mascotGoals).filter(g => g.completedToday).length);
+  const mascotHour = $derived(localFractionalHour(now, mascotProfile.timeZone));
+  const fatigueReport = $derived(computeMascotFatigue(mascotProfile, now, mascotHour));
+
   function dateLabel(value: number, timeZone: string) { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZone}).format(value); }
   function notify(message: string) { toast=message; clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast='',4000); }
-  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Load schedules for the current browser session through the API. This browser dialog or API operation returns its native completion Promise.
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Load schedules and mascot state for the current browser session through the API.
   async function load() {
     error='';
-    // eslint-disable-next-line functional/no-try-statements -- Handle schedule API failures and always clear the browser loading state.
-    try { events=(await api<{ events: ScheduleRecord[] }>('/api/schedules')).events; } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
+    // eslint-disable-next-line functional/no-try-statements -- Handle schedule and mascot API failures and always clear the browser loading state.
+    try {
+      const [scheduleRes, mascotRes] = await Promise.all([
+        api<Readonly<{ events: Readonly<ArrayLike<ScheduleRecord>> }>>('/api/schedules'),
+        api<MascotStatePayload>(`/api/mascot?tz=${encodeURIComponent(browserZone)}`).catch(always(null)),
+      ]);
+      events = Array.from(scheduleRes.events);
+      void (mascotRes && (mascot = mascotRes));
+    } catch(e) { error=e instanceof Error ? e.message : 'Unable to load events.'; }
     finally { loading=false; }
+  }
+  // eslint-disable-next-line functional/prefer-immutable-types -- Claim completed schedule XP and fatigue idempotently through the mascot API.
+  async function claimCompletedSchedule(eventId: string, eventTitle: string) {
+    // eslint-disable-next-line functional/no-conditional-statements -- Avoid duplicate claim requests while an existing claim is in flight.
+    if (claimingEvents[eventId]) return;
+    claimingEvents = { ...claimingEvents, [eventId]: true };
+    // eslint-disable-next-line functional/no-try-statements -- Ignore background claim errors cleanly and release the in-flight guard.
+    try {
+      const result = await api<Readonly<{ awarded: boolean; xpGain: number; effortDelta: number; state: MascotStatePayload }>>('/api/mascot/claim-event', 'POST', { eventId, tz: browserZone });
+      mascot = result.state;
+      void (result.awarded && (
+        celebrateMessage = result.effortDelta < 0 ? `${eventTitle} refreshed Petal! +${result.xpGain} XP` : `${eventTitle} done! +${result.xpGain} XP`,
+        celebrateNonce += 1,
+        notify(celebrateMessage)
+      ));
+    } catch { /* Retry on next refresh if offline. */ }
+    finally {
+      const { [eventId]: _done, ...rest } = claimingEvents;
+      void _done;
+      claimingEvents = rest;
+    }
+  }
+  $effect(() => {
+    const currentMascot = mascot;
+    // eslint-disable-next-line functional/no-conditional-statements -- Wait until initial mascot state loads before checking completed schedules.
+    if (!currentMascot) return;
+    const due = events.find((e: Readonly<ScheduleRecord>) =>
+      (isQuickTimer(e) || Boolean(e.activity))
+      && e.repeatUnit === 'none'
+      && Date.parse(e.targetAt) <= now
+      && localDayKey(Date.parse(e.targetAt), currentMascot.profile.timeZone) === currentMascot.profile.dayKey
+      && !Array.from(currentMascot.claimedEventIds).includes(e.id)
+      && !claimingEvents[e.id]);
+    void (due && claimCompletedSchedule(due.id, due.title));
+  });
+  // eslint-disable-next-line functional/prefer-immutable-types -- Toggle a daily goal via the API and trigger Petal celebration when marked complete.
+  async function toggleGoal(goal: MascotGoal) {
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate clicks while a mascot write is in flight.
+    if (mascotBusy) return;
+    mascotBusy = true; error = '';
+    // eslint-disable-next-line functional/no-try-statements -- Restore busy state on API failure.
+    try {
+      const nextState = await api<MascotStatePayload>(`/api/mascot/goals/${goal.id}/toggle`, 'POST', { tz: browserZone });
+      mascot = nextState;
+      void (!goal.completedToday && (
+        celebrateMessage = goal.effortDelta < 0 ? 'So refreshing! 💧' : `Nice job! +${goal.xpReward} XP`,
+        celebrateNonce += 1
+      ));
+    } catch (e) { error = e instanceof Error ? e.message : 'Unable to update goal.'; }
+    finally { mascotBusy = false; }
+  }
+  // eslint-disable-next-line functional/prefer-immutable-types -- Create a custom daily goal through the API.
+  async function addGoal(event: SubmitEvent) {
+    event.preventDefault();
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate submits while a mascot write is running.
+    if (mascotBusy) return;
+    mascotBusy = true; goalError = '';
+    // eslint-disable-next-line functional/no-try-statements -- Surface validation or server errors inline inside the goal form.
+    try {
+      const payload: Readonly<{
+        title: string;
+        emoji: string;
+        color: string;
+        xpReward: number;
+        effortDelta: number;
+      }> = {
+        title: newGoalTitle,
+        emoji: newGoalEmoji,
+        color: newGoalColor,
+        xpReward: newGoalKind === 'rest' ? 15 : 30,
+        effortDelta: newGoalKind === 'rest' ? -15 : 12,
+      };
+      const created = await api<Readonly<{ goal: MascotGoal }>>('/api/mascot/goals', 'POST', payload);
+      mascot = mascot ? { ...mascot, goals: [...Array.from(mascot.goals), created.goal] } : mascot;
+      newGoalTitle = '';
+      notify('Daily goal added!');
+    } catch (e) { goalError = e instanceof Error ? e.message : 'Unable to add goal.'; }
+    finally { mascotBusy = false; }
+  }
+  // eslint-disable-next-line functional/prefer-immutable-types -- Remove a daily goal through the API.
+  async function deleteGoal(goalId: string) {
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate deletes while a mascot write is in flight.
+    if (mascotBusy) return;
+    mascotBusy = true; goalError = '';
+    // eslint-disable-next-line functional/no-try-statements -- Surface goal deletion failures clearly.
+    try {
+      await api(`/api/mascot/goals/${goalId}`, 'DELETE');
+      mascot = mascot ? { ...mascot, goals: Array.from(mascot.goals).filter(g => g.id !== goalId) } : mascot;
+    } catch (e) { goalError = e instanceof Error ? e.message : 'Unable to delete goal.'; }
+    finally { mascotBusy = false; }
+  }
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Apply a restorative breather break through the mascot API.
+  async function takeBreather() {
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate breather taps while saving.
+    if (mascotBusy) return;
+    mascotBusy = true; error = '';
+    // eslint-disable-next-line functional/no-try-statements -- Restore busy state on breather API failure.
+    try {
+      mascot = await api<MascotStatePayload>('/api/mascot/breather', 'POST', { tz: browserZone });
+      restNonce += 1;
+    } catch (e) { error = e instanceof Error ? e.message : 'Unable to take a breather.'; }
+    finally { mascotBusy = false; }
+  }
+  // eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Toggle cozy nap posture through the mascot API.
+  async function toggleNap() {
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate nap toggles while saving.
+    if (mascotBusy) return;
+    mascotBusy = true; error = '';
+    // eslint-disable-next-line functional/no-try-statements -- Restore busy state on nap API failure.
+    try {
+      mascot = await api<MascotStatePayload>('/api/mascot/nap', 'POST', { napping: !mascotProfile.napping, tz: browserZone });
+    } catch (e) { error = e instanceof Error ? e.message : 'Unable to toggle nap.'; }
+    finally { mascotBusy = false; }
+  }
+  // eslint-disable-next-line functional/prefer-immutable-types -- Persist spring physics bounce preference through the mascot API.
+  async function changeFeel(feel: SpringFeel) {
+    // eslint-disable-next-line functional/no-conditional-statements -- Ignore duplicate clicks while saving preference.
+    if (mascotBusy || mascotProfile.springFeel === feel) return;
+    mascotBusy = true; error = '';
+    // eslint-disable-next-line functional/no-try-statements -- Restore busy state on preference API failure.
+    try {
+      mascot = await api<MascotStatePayload>('/api/mascot/preferences', 'POST', { springFeel: feel, tz: browserZone });
+    } catch (e) { error = e instanceof Error ? e.message : 'Unable to update bounce feel.'; }
+    finally { mascotBusy = false; }
   }
   onMount(()=>{
     void load();
@@ -212,12 +386,100 @@
     {#if error}<div class="error-banner" role="alert"><span>{error}</span><button onclick={load}>Try again</button></div>{/if}
 
     {#if activePage === 'home'}
-      <!-- eslint-disable functional/functional-parameters -- Home feature tiles open the selected feature screen. -->
+      <!-- eslint-disable functional/functional-parameters -- Home feature tiles and daily goals update the selected feature screen or mascot state. -->
       <section class="home-hub" aria-labelledby="hub-heading">
         <div class="hub-hero">
-          <span class="family-tag">{identity.family.name}</span>
+          <span class="family-tag">{identity.family.name} · {identity.user.username}</span>
           <h1 id="hub-heading">What shall we do today<span class="heading-dot">?</span></h1>
         </div>
+
+        <PetalMascot
+          xp={mascotProfile.xp}
+          fatigue={fatigueReport.fatigue}
+          energy={fatigueReport.energy}
+          hour={mascotHour}
+          mood={fatigueReport.mood}
+          headline={fatigueReport.headline}
+          streak={mascotProfile.streak}
+          napping={mascotProfile.napping}
+          springFeel={mascotProfile.springFeel}
+          doneCount={mascotGoalsDone}
+          totalCount={mascotGoals.length}
+          effortPoints={fatigueReport.effort}
+          {celebrateNonce}
+          {celebrateMessage}
+          {restNonce}
+          busy={mascotBusy}
+          onbreather={() => { void takeBreather(); }}
+          ontogglenap={() => { void toggleNap(); }}
+          onchangefeel={(feel: SpringFeel) => { void changeFeel(feel); }}
+        />
+
+        <section class="goals-section" aria-label="Today's Little Goals">
+          <div class="goals-header">
+            <div class="goals-title-group">
+              <h2>Today’s Little Goals</h2>
+              <span class="goals-count">{mascotGoalsDone} / {mascotGoals.length} done</span>
+            </div>
+            {#if mascot}
+              <button type="button" class="goals-edit-btn" onclick={() => { editingGoals = !editingGoals; goalError = ''; }}>
+                {editingGoals ? 'Done editing' : '＋ Edit goals'}
+              </button>
+            {:else if !loading}
+              <span class="goals-sync-note">Waiting for mascot API migration</span>
+            {/if}
+          </div>
+
+          <div class="goals-grid">
+            {#each Array.from(mascotGoals) as goal (goal.id)}
+              <div class="goal-wrap">
+                <button
+                  type="button"
+                  class="goal-card"
+                  class:is-done={goal.completedToday}
+                  style={`--goal-color:${goal.color}`}
+                  disabled={mascotBusy}
+                  onclick={() => { void toggleGoal(goal); }}
+                >
+                  <div class="goal-top">
+                    <span class="goal-emoji" aria-hidden="true">{goal.emoji}</span>
+                    <span class="goal-check" aria-hidden="true">{goal.completedToday ? '✓' : '+'}</span>
+                  </div>
+                  <strong class="goal-name">{goal.title}</strong>
+                  <span class="goal-reward">{goal.effortDelta < 0 ? 'Restores energy' : `+${goal.xpReward} XP`}</span>
+                </button>
+                {#if editingGoals && mascotGoals.length > 1}
+                  <button
+                    type="button"
+                    class="goal-delete"
+                    aria-label={`Remove ${goal.title}`}
+                    disabled={mascotBusy}
+                    onclick={() => { void deleteGoal(goal.id); }}
+                  >×</button>
+                {/if}
+              </div>
+            {/each}
+          </div>
+
+          {#if editingGoals && mascotGoals.length < MAX_MASCOT_GOALS}
+            <form class="goal-add-form" onsubmit={addGoal}>
+              <input class="goal-emoji-in" bind:value={newGoalEmoji} maxlength="16" required aria-label="Goal emoji" />
+              <input class="goal-title-in" bind:value={newGoalTitle} maxlength="60" placeholder="Add a daily goal (e.g. Piano)" required aria-label="Goal title" />
+              <select class="goal-kind-in" bind:value={newGoalKind} aria-label="Goal effect">
+                <option value="effort">Effort (+30 XP)</option>
+                <option value="rest">Rest (+Energy)</option>
+              </select>
+              <select class="goal-color-in" bind:value={newGoalColor} aria-label="Goal color">
+                <option value="#f8daae">Apricot</option>
+                <option value="#d7e7ff">Sky</option>
+                <option value="#d2e7b9">Mint</option>
+                <option value="#f4b8b1">Coral</option>
+              </select>
+              <button class="goal-add-submit" disabled={mascotBusy || !newGoalTitle.trim()}>Add</button>
+            </form>
+            {#if goalError}<p class="goal-error" role="alert">{goalError}</p>{/if}
+          {/if}
+        </section>
 
         <div class="tile-grid" role="navigation" aria-label="Choose a feature">
           <button type="button" class="feature-tile tile-timer" onclick={() => { activePage = 'timer'; }}>
@@ -292,7 +554,7 @@
         {:else}
           <div class="quiet-dock">
             <span aria-hidden="true">✳</span>
-            <span>Tap a tile above to begin</span>
+            <span>Complete goals or timers to help Petal grow</span>
           </div>
         {/if}
       </section>
@@ -428,10 +690,38 @@
   .home-pill{border:1px solid var(--primary-border);border-radius:12px;background:var(--surface-pink);padding:9px 14px;font-size:12px;font-weight:800;color:var(--rose-ink);min-height:40px}
   .home-pill:hover{background:var(--pastel-pink);color:var(--ink)}
 
-  .home-hub{height:calc(100dvh - 84px);max-height:640px;min-height:410px;display:flex;flex-direction:column;justify-content:space-between;gap:14px;padding:16px 0 12px;user-select:none}
+  .home-hub{max-width:940px;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding:18px 0 32px;user-select:none}
   .hub-hero{text-align:center}
   .family-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 12px;border-radius:999px;background:var(--surface-soft);border:1px solid var(--border);color:var(--text-secondary);margin-bottom:8px}
-  .tile-grid{flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;max-width:920px;width:100%;margin:0 auto;align-content:center;min-height:0}
+
+  .goals-section{display:flex;flex-direction:column;gap:10px}
+  .goals-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .goals-title-group{display:flex;align-items:center;gap:8px}
+  .goals-title-group h2{font-size:16px;font-weight:800;letter-spacing:-.2px;margin:0}
+  .goals-count{font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)}
+  .goals-edit-btn{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:800;color:var(--text-secondary)}
+  .goals-edit-btn:hover{background:var(--surface-soft)}
+  .goals-sync-note{font-size:11px;font-weight:700;color:var(--text-muted)}
+  .goals-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .goal-wrap{position:relative;display:flex}
+  .goal-card{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:6px;padding:12px;border-radius:20px;border:1.5px solid rgba(73,63,60,.12);background:var(--goal-color);text-align:left;transition:transform .12s ease,background-color .2s ease,border-color .2s ease,opacity .2s ease}
+  .goal-card:hover:not(:disabled){transform:translateY(-2px)}
+  .goal-card.is-done{background:var(--surface);border-color:var(--mint);opacity:.86}
+  .goal-top{display:flex;align-items:center;justify-content:space-between}
+  .goal-emoji{font-size:20px;line-height:1}
+  .goal-check{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:rgba(255,255,255,.78);color:var(--ink)}
+  .goal-card.is-done .goal-check{background:var(--mint);color:#fff}
+  .goal-name{font-size:13px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
+  .goal-card.is-done .goal-name{text-decoration:line-through;opacity:.65}
+  .goal-reward{font-size:10px;font-weight:700;color:var(--text-secondary)}
+  .goal-delete{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1px solid var(--danger-border);background:var(--surface);color:var(--danger);font-size:15px;font-weight:800;display:grid;place-items:center;box-shadow:0 2px 6px var(--shadow-soft)}
+  .goal-add-form{display:grid;grid-template-columns:56px 1fr auto auto auto;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:10px}
+  .goal-add-form input,.goal-add-form select{border:1px solid var(--border-strong);border-radius:10px;background:var(--surface-soft);padding:8px 10px;font-size:12px;color:var(--ink);min-width:0}
+  .goal-emoji-in{text-align:center;font-size:16px}
+  .goal-add-submit{border:0;border-radius:10px;background:var(--coral);color:#fff;padding:9px 14px;font-size:12px;font-weight:800}
+  .goal-error{margin:0;font-size:11px;color:var(--danger)}
+
+  .tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;width:100%}
   .feature-tile{text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:14px;padding:24px 20px 20px;border-radius:28px;border:2px solid var(--border);background:var(--surface);box-shadow:0 8px 24px var(--shadow-soft);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
   .feature-tile:hover{transform:translateY(-4px);box-shadow:0 14px 32px var(--shadow)}
   .tile-timer{background:var(--surface-pink);border-color:var(--pastel-pink)}
@@ -574,6 +864,7 @@
   @media(min-width:1500px){.app-shell{max-width:1220px}
   }
   @media(max-width:950px){.app-shell{padding:0 34px}
+    .goals-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .toolbar{gap:10px}
     .list-tools{gap:5px}
     .search input{width:85px}
@@ -581,6 +872,8 @@
 
   @media(max-width:680px){
     .app-shell{padding:0 18px}
+    .goal-add-form{grid-template-columns:56px 1fr;gap:8px}
+    .goal-kind-in,.goal-color-in,.goal-add-submit{grid-column:1 / -1}
     .tile-grid{grid-template-columns:1fr;gap:10px}
     .feature-tile{flex-direction:row;text-align:left;padding:14px 16px;border-radius:22px;gap:14px}
     .tile-bubble{width:48px;height:48px;border-radius:16px;font-size:24px;flex-shrink:0}

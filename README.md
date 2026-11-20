@@ -128,6 +128,6 @@ when a save is retried. Later changes to or deletion of a wheel do not alter
 activities that have already started. Spins themselves stay on the current device;
 saved wheels and activities are shared. Refresh the wheel list to see family edits.
 
-Apply migrations `0004_roulettes.sql` and `0005_activity_plans.sql` before deploying
+Apply migrations `0004_roulettes.sql`, `0005_activity_plans.sql`, and `0006_mascot.sql` before deploying
 the API and frontend updates (`npm run db:local` for development;
 `npm run db:remote` for production).

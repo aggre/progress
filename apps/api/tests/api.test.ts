@@ -28,7 +28,7 @@ async function fixture(t:TestContext){
  // eslint-disable-next-line functional/prefer-immutable-types -- Retain the native D1 database handle used by this isolated test environment.
  const db=await mf.getD1Database('DB');
  // eslint-disable-next-line functional/no-loop-statements -- Read and apply migration files in order against this isolated D1 environment.
- for(const file of ['0001_events.sql','0002_family_auth.sql','0003_web_push.sql','0004_roulettes.sql','0005_activity_plans.sql']){
+ for(const file of ['0001_events.sql','0002_family_auth.sql','0003_web_push.sql','0004_roulettes.sql','0005_activity_plans.sql','0006_mascot.sql']){
   const source=await readFile(new URL('../migrations/'+file,import.meta.url),'utf8');
   const migration=source.split('\n').reduce(migrationLine,{pending:'',statements:{},count:0});
   // eslint-disable-next-line functional/no-loop-statements -- Await each D1 schema write before applying dependent migration statements.
@@ -414,3 +414,85 @@ await test('roulette starts create one shared activity with a stable plan, safe 
  assert.equal((await f.request('/api/schedules/' + event.id, 'DELETE', undefined, member.sessionToken)).status, 200);
 });
 /* eslint-enable functional/no-expression-statements, functional/prefer-immutable-types, functional/no-loop-statements */
+
+/* eslint-disable functional/no-expression-statements, functional/prefer-immutable-types -- Exercise per-user mascot persistence, goal toggling, and schedule reward claiming against isolated Miniflare D1. */
+await test('mascot state is per-user, tracks growth and daily fatigue, and claims completed schedules idempotently', async t => {
+ const f = await fixture(t), parent = await f.challenge('parent-user');
+ await f.bootstrap(parent, 'parent-user');
+ await f.request('/api/family/members', 'POST', { username: 'kid-user' }, parent.sessionToken);
+ const kid = await f.challenge('kid-user');
+ await f.request(`/api/auth/challenges/${kid.id}/approve`, 'POST', { approvalToken: kid.approvalToken }, parent.sessionToken);
+
+ assert.equal((await f.request('/api/mascot')).status, 401);
+ const initialRes = await f.request('/api/mascot?tz=Asia/Tokyo', 'GET', undefined, kid.sessionToken);
+ assert.equal(initialRes.status, 200);
+ const initial = await initialRes.json() as { profile: { xp: number; streak: number; effortPoints: number; restPoints: number; dayKey: string; springFeel: string }; goals: readonly { id: string; title: string; xpReward: number; effortDelta: number; completedToday: boolean }[] };
+ assert.equal(initial.profile.xp, 0);
+ assert.equal(initial.goals.length, 4);
+
+ const effortGoal = initial.goals.find(g => g.effortDelta > 0)!;
+ const restGoal = initial.goals.find(g => g.effortDelta < 0)!;
+
+ // Completing a goal grows XP, advances streak, and adds effort; parent's own mascot remains isolated at 0 XP.
+ const afterEffort = await (await f.request(`/api/mascot/goals/${effortGoal.id}/toggle`, 'POST', { tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as typeof initial;
+ assert.equal(afterEffort.profile.xp, effortGoal.xpReward);
+ assert.equal(afterEffort.profile.effortPoints, effortGoal.effortDelta);
+ assert.equal(afterEffort.profile.streak, 1);
+ assert.equal(afterEffort.goals.find(g => g.id === effortGoal.id)?.completedToday, true);
+
+ const parentInitial = await (await f.request('/api/mascot?tz=Asia/Tokyo', 'GET', undefined, parent.sessionToken)).json() as typeof initial;
+ assert.equal(parentInitial.profile.xp, 0);
+ assert.equal(parentInitial.profile.effortPoints, 0);
+
+ // Undoing a goal reverts XP and effort cleanly.
+ const undone = await (await f.request(`/api/mascot/goals/${effortGoal.id}/toggle`, 'POST', { tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as typeof initial;
+ assert.equal(undone.profile.xp, 0);
+ assert.equal(undone.profile.effortPoints, 0);
+
+ // Rest goal, breather, nap, and feel preference persist cleanly.
+ const afterRest = await (await f.request(`/api/mascot/goals/${restGoal.id}/toggle`, 'POST', { tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as typeof initial;
+ assert.equal(afterRest.profile.restPoints, Math.abs(restGoal.effortDelta));
+ const afterBreather = await (await f.request('/api/mascot/breather', 'POST', { tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as typeof initial;
+ assert.equal(afterBreather.profile.restPoints, Math.abs(restGoal.effortDelta) + 20);
+ const napped = await (await f.request('/api/mascot/nap', 'POST', { napping: true, tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as { profile: { napping: boolean } };
+ assert.equal(napped.profile.napping, true);
+ const felt = await (await f.request('/api/mascot/preferences', 'POST', { springFeel: 'jelly', tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as typeof initial;
+ assert.equal(felt.profile.springFeel, 'jelly');
+ assert.equal((await f.request('/api/mascot/preferences', 'POST', { springFeel: 'invalid' }, kid.sessionToken)).status, 400);
+
+ // Custom goals can be created and deleted up to bounds.
+ const createdGoalRes = await f.request('/api/mascot/goals', 'POST', { title: 'Piano', emoji: '🎹', color: '#f8daae', xpReward: 30, effortDelta: 12 }, kid.sessionToken);
+ assert.equal(createdGoalRes.status, 201);
+ const { goal: customGoal } = await createdGoalRes.json() as { goal: { id: string } };
+ assert.equal((await f.request(`/api/mascot/goals/${customGoal.id}`, 'DELETE', undefined, parent.sessionToken)).status, 404);
+ assert.equal((await f.request(`/api/mascot/goals/${customGoal.id}`, 'DELETE', undefined, kid.sessionToken)).status, 200);
+
+ // Claiming a completed timer today grants XP & effort exactly once (idempotent).
+ const now = Date.now();
+ const finishedTimer = await f.request('/api/schedules', 'POST', {
+  title: 'Homework', emoji: '✏️', color: '#f2f6bd',
+  startAt: new Date(now - 15 * 60000).toISOString(),
+  targetAt: new Date(now - 1000).toISOString(),
+  repeatUnit: 'none', repeatEvery: 1, timeZone: 'Asia/Tokyo',
+ }, parent.sessionToken);
+ const { event: timerEvent } = await finishedTimer.json() as { event: ScheduleRecord };
+ const claim1 = await (await f.request('/api/mascot/claim-event', 'POST', { eventId: timerEvent.id, tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as { awarded: boolean; xpGain: number; effortDelta: number; state: typeof initial };
+ assert.equal(claim1.awarded, true);
+ assert.ok(claim1.xpGain > 0 && claim1.effortDelta > 0);
+ const claim2 = await (await f.request('/api/mascot/claim-event', 'POST', { eventId: timerEvent.id, tz: 'Asia/Tokyo' }, kid.sessionToken)).json() as { awarded: boolean; state: typeof initial };
+ assert.equal(claim2.awarded, false);
+ assert.equal(claim2.state.profile.xp, claim1.state.profile.xp);
+
+ // Crossing into a new local day resets daily effort/rest/nap while preserving XP and streak when active yesterday.
+ const yesterdayKey = new Date(Date.parse(initial.profile.dayKey + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
+ await f.db.prepare('UPDATE mascot_profiles SET day_key = ?, last_active_day = ?, effort_points = 42, rest_points = 15, napping = 1 WHERE day_key = ?')
+  .bind(yesterdayKey, yesterdayKey, initial.profile.dayKey).run();
+ const rolled = await (await f.request('/api/mascot?tz=Asia/Tokyo', 'GET', undefined, kid.sessionToken)).json() as { profile: { xp: number; streak: number; effortPoints: number; restPoints: number; napping: boolean; dayKey: string } };
+ assert.equal(rolled.profile.dayKey, initial.profile.dayKey);
+ assert.equal(rolled.profile.effortPoints, 0);
+ assert.equal(rolled.profile.restPoints, 0);
+ assert.equal(rolled.profile.napping, false);
+ assert.equal(rolled.profile.streak, 1);
+ assert.equal(rolled.profile.xp, claim1.state.profile.xp);
+});
+/* eslint-enable functional/no-expression-statements, functional/prefer-immutable-types */

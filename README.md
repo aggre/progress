@@ -33,7 +33,7 @@ See [architecture and authentication](docs/architecture.md) for the protocol and
 
 The control hides when running as an installed app and after the browser reports a completed installation. Ordinary browser tabs cannot reliably detect all existing installations, so they may still show installation guidance. No permanent local installation flag is stored, allowing the control to return after uninstalling.
 
-The signed-in dashboard opens directly on **Your time, in progress.** Use **Settings** in the header for push notifications, installation, event export, and sign-out. **Family** and **Add event** remain directly accessible. Closing Settings preserves the event search, filter, and sort order.
+The signed-in dashboard opens on a family **Home Hub** with feature tiles for **Quick timer**, **Progress**, and **Family roulettes**, plus a live **Happening right now** preview whenever a timer or playtime plan is active. Use the top switcher or tile cards to move between spaces, and use **Settings** in the header for push notifications, installation, event export, and sign-out. Closing Settings preserves the current feature view, event search, filter, and sort order.
 
 ## Local development
 
@@ -94,9 +94,18 @@ The intended project URL is `https://aggre.github.io/progress/`. GitHub Pages se
 - Notifications can arrive after the app tab closes. HTTPS (or localhost), a browser with Push API support, browser permission, and device notification settings are required. Device sleep, offline operation, browser shutdown, or force-stop can delay or prevent delivery; Web Push is not an exact alarm. On iPhone and iPad, use a supported version of iOS/iPadOS and add the app to the Home Screen before enabling notifications.
 - Subscriptions belong to the current signed-in browser session. Turning notifications off or signing out stops future sends; session expiry also stops sends. Sign in again and enable notifications to resume. A push already accepted by the browser's push service may still be delivered.
 
+## Quick family timers
+
+Open **Quick timer** from the Home Hub tile or top navigation to start a short, family-shared countdown in two taps:
+
+1. Pick an activity preset (**Game time**, **Video time**, **Reading**, **Play & build**, **Clean up**, **Homework**, or **Bath & ready**) or enter a custom name, icon, and color.
+2. Tap a preset duration button (**5 min**, **10 min**, **15 min**, **30 min**, **45 min**, or **1 hr**) or start a custom duration of 1–240 minutes.
+
+Quick timers are persisted through `/api/schedules` as absolute start and target instants, so every signed-in family member sees the live remaining time across devices. The starter can extend a timer with **+5 min** (up to 240 total minutes) or delete it with **×**, and timers can also be filtered under **Progress → Timers**.
+
 ## Family roulettes
 
-Open **Add event → Roulette**, or **Family roulettes**, to save a wheel of fun
+Open **Family roulettes** from the Home Hub tile, top navigation, or **Add event → Roulette** to save a wheel of fun
 activities for everyone in your family. Give it a name, 2–20 choices, and a play
 time of 1–240 minutes. Optionally add one task to do afterward, such as **Clean up**
 for 5 minutes (1–60 minutes). Only the wheel's creator can change its settings.

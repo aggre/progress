@@ -2,15 +2,19 @@
   import { onMount, tick } from 'svelte';
   import { sort as sortRows, sortBy } from 'ramda';
   import { cycle, remainingText, repeatLabel, palette, units, shift, toLocal, fromLocal, starterEvents, type EventInput, type RepeatUnit } from '@little/shared/events';
+  import { isQuickTimer, timerDurationLabel, timerTotalMinutes } from '@little/shared/timer';
 
   import type { Identity, ScheduleRecord } from '@little/shared/api';
   import { api, BASE_PATH } from '../lib/api';
   import SettingsPanel from './SettingsPanel.svelte';
   import ActivityCard from './ActivityCard.svelte';
   import RouletteLibrary from './RouletteLibrary.svelte';
+  import QuickTimerPanel from './QuickTimerPanel.svelte';
   type EventRow = Readonly<ScheduleRecord & { timing: ReturnType<typeof cycle> }>;
+  type FeaturePage = 'home' | 'timer' | 'progress' | 'roulette';
   let { identity, onlogout, onfamily }: { identity: Identity; onlogout: () => void; onfamily: () => void } = $props();
 
+  let activePage = $state<FeaturePage>('home');
   // eslint-disable-next-line functional/prefer-immutable-types -- Svelte owns this reactive collection proxy; API loads and edits replace its current browser state.
   let events = $state<ScheduleRecord[]>([]);
   let now = $state(Date.now());
@@ -49,9 +53,12 @@
   const rows: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(events.map((e:Readonly<ScheduleRecord>): EventRow=>({...e, timing:cycle(e,now)})).entries()));
   const completed = $derived(Object.values(rows).filter(e=>e.timing.complete).length);
   const active: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(Object.values(rows).filter(e=>!e.timing.complete).entries()));
+  const activeTimers: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(Object.values(active).filter(isQuickTimer).entries()));
+  const activeActivities: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(Object.values(active).filter(e=>Boolean(e.activity)).entries()));
+  const activeCountdowns: Readonly<Record<number, EventRow>> = $derived(Object.fromEntries(Object.values(active).filter(e=>!isQuickTimer(e) && !e.activity).entries()));
   const repeatingCount = $derived(events.filter((e:Readonly<ScheduleRecord>)=>e.repeatUnit !== 'none').length);
   const visible: Readonly<Record<number, EventRow>> = $derived.by((): Readonly<Record<number, EventRow>>=>{
-    const list: Readonly<Record<number, EventRow>> = Object.fromEntries(Object.values(rows).filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && `${e.title} ${e.activity?.afterTask?.title ?? ''}`.toLowerCase().includes(query.toLowerCase())).entries());
+    const list: Readonly<Record<number, EventRow>> = Object.fromEntries(Object.values(rows).filter(e=>(showCompleted || !e.timing.complete) && (filter === 'all' || (filter === 'timers' ? isQuickTimer(e) : filter === 'repeating' ? e.repeatUnit !== 'none' : e.repeatUnit === 'none')) && `${e.title} ${e.activity?.afterTask?.title ?? ''}`.toLowerCase().includes(query.toLowerCase())).entries());
     return Object.fromEntries((sort === 'soonest' ? sortBy((event: EventRow)=>event.timing.end,Object.values(list))
       : sort === 'name' ? sortRows((a: EventRow,b: EventRow)=>a.title.localeCompare(b.title),Object.values(list))
       : Object.values(list)).entries());
@@ -96,6 +103,40 @@
   function setRepeatChoice(choice: RepeatUnit | 'two-weeks') {
     repeatEvery = choice === 'two-weeks' ? 2 : getRepeatChoice() === 'two-weeks' ? 1 : repeatEvery;
     repeatUnit = choice === 'two-weeks' ? 'week' : choice;
+  }
+  // eslint-disable-next-line functional/prefer-immutable-types -- Create a quick timer schedule through the API and update the reactive schedule list.
+  async function createQuickTimer(input: Readonly<EventInput>, message: string) {
+    // eslint-disable-next-line functional/no-conditional-statements -- Avoid duplicate API writes while another save operation is in flight.
+    if (saving) return;
+    saving = true; error = '';
+    // eslint-disable-next-line functional/no-try-statements -- Surface API failures without losing the user's current timer draft.
+    try {
+      const result = await api<Readonly<{ event: Readonly<ScheduleRecord> }>>('/api/schedules', 'POST', input);
+      events = [...events, result.event];
+      now = Date.now();
+      notify(message);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Unable to start timer.';
+    } finally {
+      saving = false;
+    }
+  }
+  // eslint-disable-next-line functional/prefer-immutable-types -- Update an existing quick timer schedule through the API and replace it in the reactive schedule list.
+  async function updateQuickTimer(id: string, input: Readonly<EventInput>, message: string) {
+    // eslint-disable-next-line functional/no-conditional-statements -- Avoid duplicate API writes while another save operation is in flight.
+    if (saving) return;
+    saving = true; error = '';
+    // eslint-disable-next-line functional/no-try-statements -- Surface API failures without discarding the current timer list.
+    try {
+      const result = await api<Readonly<{ event: Readonly<ScheduleRecord> }>>(`/api/schedules/${id}`, 'PUT', input);
+      events = events.map((e: Readonly<ScheduleRecord>) => e.id === id ? result.event : e);
+      now = Date.now();
+      notify(message);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Unable to update timer.';
+    } finally {
+      saving = false;
+    }
   }
   // eslint-disable-next-line functional/prefer-immutable-types -- This browser dialog or API operation returns its native completion Promise.
   async function save(
@@ -146,7 +187,7 @@
   }
   function activityStarted(event: ScheduleRecord) {
     events = [...events.filter((item: Readonly<ScheduleRecord>) => item.id !== event.id), event];
-    query = ''; filter = 'all'; now = Date.now(); dialog.close(); notify('Your playtime has started.');
+    query = ''; filter = 'all'; now = Date.now(); void (dialog?.open && dialog.close()); notify('Your playtime has started.');
     void tick().then(() => document.getElementById(`activity-${event.id}`)?.focus());
   }
   function confirmDelete(e: Readonly<ScheduleRecord>) { deleteEvent=e;formError='';deleteDialog.showModal(); }
@@ -154,7 +195,25 @@
 
 <div class="app-shell">
   <header class="topbar">
-    <a class="brand" href={BASE_PATH} aria-label="Little by little home"><span class="brand-mark" aria-hidden="true">⌛</span><span>little by little<span class="brand-dot">.</span></span></a>
+    <!-- eslint-disable-next-line functional/prefer-immutable-types -- Intercept the brand link click to return directly to the feature tile home screen. -->
+    <a class="brand" href={BASE_PATH} aria-label="Little by little home" onclick={e => { e.preventDefault(); activePage = 'home'; }}><span class="brand-mark" aria-hidden="true">⌛</span><span>little by little<span class="brand-dot">.</span></span></a>
+    <!-- eslint-disable functional/functional-parameters -- Top navigation pills switch between the home hub and individual feature screens. -->
+    <nav class="space-switcher" aria-label="Features">
+      <button type="button" class:active={activePage === 'home'} aria-current={activePage === 'home' ? 'page' : undefined} onclick={() => { activePage = 'home'; }}>🏠 Home</button>
+      <button type="button" class:active={activePage === 'timer'} aria-current={activePage === 'timer' ? 'page' : undefined} onclick={() => { activePage = 'timer'; }}>
+        ⏱️ Timer
+        {#if Object.values(activeTimers).length}<span class="nav-count">{Object.values(activeTimers).length}</span>{/if}
+      </button>
+      <button type="button" class:active={activePage === 'progress'} aria-current={activePage === 'progress' ? 'page' : undefined} onclick={() => { activePage = 'progress'; }}>
+        🌱 Progress
+        {#if Object.values(activeCountdowns).length}<span class="nav-count">{Object.values(activeCountdowns).length}</span>{/if}
+      </button>
+      <button type="button" class:active={activePage === 'roulette'} aria-current={activePage === 'roulette' ? 'page' : undefined} onclick={() => { activePage = 'roulette'; }}>
+        🎡 Roulette
+        {#if Object.values(activeActivities).length}<span class="nav-count">{Object.values(activeActivities).length}</span>{/if}
+      </button>
+    </nav>
+    <!-- eslint-enable functional/functional-parameters -->
     <nav class="header-right" aria-label="Your space">
       <button class="family-button" onclick={onfamily}>Family</button>
       <!-- eslint-disable-next-line functional/functional-parameters -- Open settings without leaving the current event list or changing its filters. -->
@@ -163,32 +222,184 @@
   </header>
 
   <main>
-    <section class="events-section" aria-labelledby="events-heading">
-  <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the browser Add event button. The editor callback returns its native dialog completion Promise. -->
-      <div class="section-heading"><div><h1 id="events-heading">Your time,<br class="mobile-break"/> in progress<span class="heading-dot">.</span></h1><p class="event-summary" aria-label="Schedule overview">{#if loading}Your family’s shared moments{:else}<span><strong>{Object.values(active).length}</strong> upcoming</span><span class="summary-dot" aria-hidden="true">·</span><span><strong>{repeatingCount}</strong> repeating</span>{/if}</p></div><div class="add-actions"><button class="secondary" onclick={()=>openEditor(null, 'roulette')}>Family roulettes ↻</button><button class="primary add-button" onclick={()=>openEditor()}><span aria-hidden="true">＋</span> Add event</button></div></div>
-  <!-- eslint-disable-next-line functional/functional-parameters -- Browser filter buttons update the currently selected event-list tab. -->
-      <div class="toolbar"><div class="tabs" aria-label="Filter events"><button class:chosen={filter==='all'} onclick={()=>filter='all'} aria-pressed={filter==='all'}>All events <span>{events.length}</span></button><button class:chosen={filter==='repeating'} onclick={()=>filter='repeating'} aria-pressed={filter==='repeating'}>Repeating</button><button class:chosen={filter==='once'} onclick={()=>filter='once'} aria-pressed={filter==='once'}>One-time</button></div><div class="list-tools"><label class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input aria-label="Search events" placeholder="Find an event" bind:value={query}/></label><select aria-label="Sort events" bind:value={sort}><option value="custom">Date added</option><option value="soonest">Soonest first</option><option value="name">Name A–Z</option></select></div></div>
-      {#if error}<div class="error-banner" role="alert"><span>{error}</span><button onclick={load}>Try again</button></div>{/if}
-      {#if loading}<div class="loading-state"><span class="loading-ring"></span> Gathering your moments…</div>
-  <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the empty-state browser button. The editor callback returns its native dialog completion Promise. -->
-      {:else if !events.length && !error}<div class="empty-state"><span class="empty-emoji">🌱</span><h3>Something to look forward to.</h3><p>Your next adventure, a birthday, or simply a fresh day.<br/>Give your first countdown a little space.</p><button class="primary" onclick={()=>openEditor()}>＋ Create your first event</button><button class="text-button" disabled={seeding} onclick={seed}>{seeding ? 'Adding your countdowns…' : 'Or start with 6 everyday countdowns ↗'}</button></div>
-  <!-- eslint-disable-next-line functional/functional-parameters -- Reset browser search and filter controls from the Show all events button. -->
-      {:else if !Object.values(visible).length && !error}<div class="empty-state"><span class="empty-emoji">🔎</span><h3>No moments here, just yet.</h3><p>Try another search or filter, or add something new.</p><button class="text-button" onclick={()=>{query='';filter='all';showCompleted=true;}}>Show all events</button></div>
-      {:else}<div class="event-list">{#each Object.values(visible) as e (e.id)}
-        {#if e.activity}<ActivityCard event={e} plan={e.activity} {now} onremove={confirmDelete} />{:else}
-        <article class="event-card" class:is-complete={e.timing.complete} style={`--event-color:${e.color}`}>
-  <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native editor for the schedule selected with its browser edit button. The editor callback returns its native dialog completion Promise. -->
-          <div class="event-top"><div class="event-identity"><span class="event-emoji" aria-hidden="true">{e.emoji}</span><h3>{e.title}</h3></div>{#if e.canEdit}<button class="edit-button" aria-label={`Edit ${e.title}`} title="Edit event" onclick={()=>openEditor(e)}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m12.5 4.5 3 3M3.5 16.5l3.7-.7L16 7a2.1 2.1 0 0 0-3-3L4.2 12.8l-.7 3.7Z"/></svg></button>{/if}</div>
-          <div class="progress-track" role="progressbar" aria-label={`${e.title}: elapsed time`} aria-valuenow={Math.round(e.timing.progress*10)/10} aria-valuemin="0" aria-valuemax="100" aria-valuetext={`${e.timing.progress.toFixed(1)} percent elapsed; ${remainingText(e.timing.remaining)} remaining`}><div class="progress-fill" style={`width:${e.timing.progress}%`}></div></div>
-          <div class="event-bottom">
-            <details class="event-details"><summary>{repeatLabel(e)}</summary><p>{dateLabel(e.timing.end,e.timeZone)} · {e.timeZone}</p><p>Added by {e.createdBy.username}</p><p>{e.timing.progress.toFixed(1)}% elapsed</p></details>
-            <div class="event-countdown"><strong>{e.timing.complete ? 'Arrived' : `${remainingText(e.timing.remaining)} left`}</strong>{#if e.timing.upcoming}<span>Starts later</span>{/if}</div>
+    {#if error}<div class="error-banner" role="alert"><span>{error}</span><button onclick={load}>Try again</button></div>{/if}
+
+    {#if activePage === 'home'}
+      <!-- eslint-disable functional/functional-parameters -- Home feature tiles open the selected feature screen. -->
+      <section class="home-hub" aria-labelledby="hub-heading">
+        <div class="hub-hero">
+          <p class="eyebrow">FAMILY TIME HUB · {identity.family.name.toUpperCase()}</p>
+          <h1 id="hub-heading">What shall we do today<span class="heading-dot">?</span></h1>
+          <p class="hub-subtitle">Pick a tile to start a quick play timer, check your family’s countdowns, or spin a roulette wheel together.</p>
+        </div>
+
+        <div class="tile-grid" role="navigation" aria-label="Choose a feature">
+          <button type="button" class="feature-tile tile-timer" onclick={() => { activePage = 'timer'; }}>
+            <div class="tile-top">
+              <span class="tile-icon" aria-hidden="true">⏱️</span>
+              <span class="tile-badge">
+                {Object.values(activeTimers).length
+                  ? `${Object.values(activeTimers).length} running now`
+                  : '5 min · 10 min · 30 min · 1 hr'}
+              </span>
+            </div>
+            <h2>Quick timer</h2>
+            <p class="tile-story">“I want to play games!” → “How many minutes?” → “30 min!”</p>
+            <p class="tile-desc">Pick an icon and tap a time button to start a shared family countdown in two taps.</p>
+            <div class="tile-chips" aria-hidden="true">
+              <span>🎮 5 min</span>
+              <span>📺 10 min</span>
+              <span>📖 30 min</span>
+              <span>🎨 1 hr</span>
+            </div>
+            <span class="tile-cta">Open Quick timer →</span>
+          </button>
+
+          <button type="button" class="feature-tile tile-progress" onclick={() => { activePage = 'progress'; }}>
+            <div class="tile-top">
+              <span class="tile-icon" aria-hidden="true">🌱</span>
+              <span class="tile-badge">
+                {loading
+                  ? 'Loading…'
+                  : `${Object.values(active).length} active · ${repeatingCount} repeating`}
+              </span>
+            </div>
+            <h2>Progress</h2>
+            <p class="tile-story">Your time, in progress.</p>
+            <p class="tile-desc">Live progress bars for birthdays, trips, weekends, and repeating family routines.</p>
+            <div class="tile-chips" aria-hidden="true">
+              <span>🎂 Birthdays</span>
+              <span>🌿 Weekends</span>
+              <span>✈️ Trips</span>
+            </div>
+            <span class="tile-cta">Open Progress →</span>
+          </button>
+
+          <button type="button" class="feature-tile tile-roulette" onclick={() => { activePage = 'roulette'; }}>
+            <div class="tile-top">
+              <span class="tile-icon" aria-hidden="true">🎡</span>
+              <span class="tile-badge">
+                {Object.values(activeActivities).length
+                  ? `${Object.values(activeActivities).length} playtime active`
+                  : 'Spin & play'}
+              </span>
+            </div>
+            <h2>Family roulettes</h2>
+            <p class="tile-story">Not sure what to play? Let the wheel decide!</p>
+            <p class="tile-desc">Spin a shared wheel of fun choices, with an optional clean-up task afterward.</p>
+            <div class="tile-chips" aria-hidden="true">
+              <span>🎨 Drawing</span>
+              <span>🧱 LEGO</span>
+              <span>🧹 Clean up</span>
+            </div>
+            <span class="tile-cta">Open Roulettes →</span>
+          </button>
+        </div>
+
+        {#if Object.values(activeTimers).length || Object.values(activeActivities).length}
+          <div class="happening-now">
+            <div class="happening-header">
+              <h3><span class="pulse-dot" aria-hidden="true"></span> Happening right now</h3>
+              <button type="button" class="text-link" onclick={() => { activePage = Object.values(activeTimers).length ? 'timer' : 'roulette'; }}>
+                Manage →
+              </button>
+            </div>
+            <div class="event-list">
+              {#each Object.values(activeTimers) as item (item.id)}
+                <article class="event-card" style={`--event-color:${item.color}`}>
+                  <div class="event-top">
+                    <div class="event-identity">
+                      <span class="event-emoji" aria-hidden="true">{item.emoji}</span>
+                      <h3>{item.title}</h3>
+                      <span class="timer-pill">{timerDurationLabel(timerTotalMinutes(item))}</span>
+                    </div>
+                    <button type="button" class="secondary small-btn" onclick={() => { activePage = 'timer'; }}>Open timer</button>
+                  </div>
+                  <div class="progress-track" role="progressbar" aria-label={`${item.title}: elapsed time`} aria-valuenow={Math.round(item.timing.progress * 10) / 10} aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-fill" style={`width:${item.timing.progress}%`}></div>
+                  </div>
+                  <div class="event-bottom">
+                    <span class="started-by">Started by {item.createdBy.username}</span>
+                    <div class="event-countdown"><strong>{remainingText(item.timing.remaining)} left</strong></div>
+                  </div>
+                </article>
+              {/each}
+              {#each Object.values(activeActivities) as item (item.id)}
+                {#if item.activity}
+                  <ActivityCard event={item} plan={item.activity} {now} onremove={confirmDelete} />
+                {/if}
+              {/each}
+            </div>
           </div>
-        </article>
         {/if}
-      {/each}</div>{/if}
-      <div class="list-footer"><label class="completed-toggle"><input type="checkbox" bind:checked={showCompleted}/><span>Show completed{completed ? ` (${completed})` : ''}</span></label><span>{Object.values(visible).length} {Object.values(visible).length===1 ? 'event' : 'events'}<span class="footer-separator">·</span>Updated every second</span></div>
-    </section>
+      </section>
+      <!-- eslint-enable functional/functional-parameters -->
+    {:else if activePage === 'timer'}
+      <!-- eslint-disable-next-line functional/functional-parameters -- Back link returns to the feature tile home screen. -->
+      <div class="back-bar"><button type="button" class="back-home" onclick={() => { activePage = 'home'; }}>← Back to home tiles</button></div>
+      <QuickTimerPanel
+        events={rows}
+        busy={saving}
+        oncreate={(input: Readonly<EventInput>, label: string) => { void createQuickTimer(input, label); }}
+        onupdate={(id: string, input: Readonly<EventInput>, label: string) => { void updateQuickTimer(id, input, label); }}
+        onremove={confirmDelete}
+      />
+    {:else if activePage === 'roulette'}
+      <!-- eslint-disable-next-line functional/functional-parameters -- Back link returns to the feature tile home screen. -->
+      <div class="back-bar"><button type="button" class="back-home" onclick={() => { activePage = 'home'; }}>← Back to home tiles</button></div>
+      <section class="roulette-page" aria-labelledby="roulette-page-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">SPIN & PLAY TOGETHER</p>
+            <h1 id="roulette-page-heading">Family roulettes<span class="heading-dot">.</span></h1>
+            <p class="event-summary">Spin a wheel of fun ideas and start a shared playtime plan.</p>
+          </div>
+        </div>
+        <div class="roulette-surface">
+          <RouletteLibrary onbusy={(value: boolean) => { saving = value; }} onstarted={activityStarted} />
+        </div>
+        {#if Object.values(activeActivities).length}
+          <div class="active-playtime">
+            <h2>Active playtime plans</h2>
+            <div class="event-list">
+              {#each Object.values(activeActivities) as item (item.id)}
+                {#if item.activity}
+                  <ActivityCard event={item} plan={item.activity} {now} onremove={confirmDelete} />
+                {/if}
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </section>
+    {:else}
+      <!-- eslint-disable-next-line functional/functional-parameters -- Back link returns to the feature tile home screen. -->
+      <div class="back-bar"><button type="button" class="back-home" onclick={() => { activePage = 'home'; }}>← Back to home tiles</button></div>
+      <section class="events-section" aria-labelledby="events-heading">
+  <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the browser Add event button. The editor callback returns its native dialog completion Promise. -->
+        <div class="section-heading"><div><h1 id="events-heading">Your time,<br class="mobile-break"/> in progress<span class="heading-dot">.</span></h1><p class="event-summary" aria-label="Schedule overview">{#if loading}Your family’s shared moments{:else}<span><strong>{Object.values(active).length}</strong> upcoming</span><span class="summary-dot" aria-hidden="true">·</span><span><strong>{repeatingCount}</strong> repeating</span>{/if}</p></div><div class="add-actions"><button class="secondary" onclick={()=>{ activePage = 'timer'; }}>⏱️ Quick timer</button><button class="secondary" onclick={()=>openEditor(null, 'roulette')}>Family roulettes ↻</button><button class="primary add-button" onclick={()=>openEditor()}><span aria-hidden="true">＋</span> Add event</button></div></div>
+  <!-- eslint-disable-next-line functional/functional-parameters -- Browser filter buttons update the currently selected event-list tab. -->
+        <div class="toolbar"><div class="tabs" aria-label="Filter events"><button class:chosen={filter==='all'} onclick={()=>filter='all'} aria-pressed={filter==='all'}>All events <span>{events.length}</span></button><button class:chosen={filter==='timers'} onclick={()=>filter='timers'} aria-pressed={filter==='timers'}>Timers</button><button class:chosen={filter==='repeating'} onclick={()=>filter='repeating'} aria-pressed={filter==='repeating'}>Repeating</button><button class:chosen={filter==='once'} onclick={()=>filter='once'} aria-pressed={filter==='once'}>One-time</button></div><div class="list-tools"><label class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input aria-label="Search events" placeholder="Find an event" bind:value={query}/></label><select aria-label="Sort events" bind:value={sort}><option value="custom">Date added</option><option value="soonest">Soonest first</option><option value="name">Name A–Z</option></select></div></div>
+        {#if loading}<div class="loading-state"><span class="loading-ring"></span> Gathering your moments…</div>
+  <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native event editor from the empty-state browser button. The editor callback returns its native dialog completion Promise. -->
+        {:else if !events.length && !error}<div class="empty-state"><span class="empty-emoji">🌱</span><h3>Something to look forward to.</h3><p>Your next adventure, a birthday, or simply a fresh day.<br/>Give your first countdown a little space.</p><button class="primary" onclick={()=>openEditor()}>＋ Create your first event</button><button class="text-button" disabled={seeding} onclick={seed}>{seeding ? 'Adding your countdowns…' : 'Or start with 6 everyday countdowns ↗'}</button></div>
+  <!-- eslint-disable-next-line functional/functional-parameters -- Reset browser search and filter controls from the Show all events button. -->
+        {:else if !Object.values(visible).length && !error}<div class="empty-state"><span class="empty-emoji">🔎</span><h3>No moments here, just yet.</h3><p>Try another search or filter, or add something new.</p><button class="text-button" onclick={()=>{query='';filter='all';showCompleted=true;}}>Show all events</button></div>
+        {:else}<div class="event-list">{#each Object.values(visible) as e (e.id)}
+          {#if e.activity}<ActivityCard event={e} plan={e.activity} {now} onremove={confirmDelete} />{:else}
+          <article class="event-card" class:is-complete={e.timing.complete} style={`--event-color:${e.color}`}>
+  <!-- eslint-disable-next-line functional/functional-parameters, functional/prefer-immutable-types -- Open the native editor for the schedule selected with its browser edit button. The editor callback returns its native dialog completion Promise. -->
+            <div class="event-top"><div class="event-identity"><span class="event-emoji" aria-hidden="true">{e.emoji}</span><h3>{e.title}</h3>{#if isQuickTimer(e)}<span class="timer-pill">{timerDurationLabel(timerTotalMinutes(e))}</span>{/if}</div>{#if e.canEdit}<button class="edit-button" aria-label={`Edit ${e.title}`} title="Edit event" onclick={()=>openEditor(e)}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m12.5 4.5 3 3M3.5 16.5l3.7-.7L16 7a2.1 2.1 0 0 0-3-3L4.2 12.8l-.7 3.7Z"/></svg></button>{/if}</div>
+            <div class="progress-track" role="progressbar" aria-label={`${e.title}: elapsed time`} aria-valuenow={Math.round(e.timing.progress*10)/10} aria-valuemin="0" aria-valuemax="100" aria-valuetext={`${e.timing.progress.toFixed(1)} percent elapsed; ${remainingText(e.timing.remaining)} remaining`}><div class="progress-fill" style={`width:${e.timing.progress}%`}></div></div>
+            <div class="event-bottom">
+              <details class="event-details"><summary>{isQuickTimer(e) ? `Quick timer (${timerDurationLabel(timerTotalMinutes(e))})` : repeatLabel(e)}</summary><p>{dateLabel(e.timing.end,e.timeZone)} · {e.timeZone}</p><p>Added by {e.createdBy.username}</p><p>{e.timing.progress.toFixed(1)}% elapsed</p></details>
+              <div class="event-countdown"><strong>{e.timing.complete ? 'Arrived' : `${remainingText(e.timing.remaining)} left`}</strong>{#if e.timing.upcoming}<span>Starts later</span>{/if}</div>
+            </div>
+          </article>
+          {/if}
+        {/each}</div>{/if}
+        <div class="list-footer"><label class="completed-toggle"><input type="checkbox" bind:checked={showCompleted}/><span>Show completed{completed ? ` (${completed})` : ''}</span></label><span>{Object.values(visible).length} {Object.values(visible).length===1 ? 'event' : 'events'}<span class="footer-separator">·</span>Updated every second</span></div>
+      </section>
+    {/if}
     <div class="closing-note"><span aria-hidden="true">✳</span><p>{next ? 'There’s always something to look forward to.' : 'A little space for the things that matter.'}</p><span class="note-line"></span></div>
   </main>
   <footer class="site-footer"><span>little by little<span class="brand-dot">.</span></span><span>Good things take time.</span></footer>
@@ -247,15 +458,62 @@
   .settings-button circle{fill:var(--surface);stroke:currentColor;stroke-width:1.4}
 
   .app-shell{max-width:1280px;margin:auto;padding:0 64px}
-  .topbar{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;background:var(--canvas)}
+  .topbar{min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;background:var(--canvas)}
   .brand{text-decoration:none;display:flex;align-items:center;gap:11px;font-weight:700;font-size:22px;letter-spacing:-.8px}
   .brand-mark{width:34px;height:38px;display:grid;place-items:center;background:var(--rainbow);border-radius:13px;font-size:21px;transform:rotate(-7deg)}
   .brand-dot{color:var(--rose-ink)}
   .header-right{display:flex;align-items:center;gap:10px}
 
-  .eyebrow{font-size:10px;letter-spacing:2px;font-weight:600;color:var(--text-muted);display:flex;align-items:center;gap:8px;margin:0 0 20px}
+  .space-switcher{display:flex;align-items:center;gap:4px;background:var(--surface-soft);border:1px solid var(--border);padding:4px;border-radius:14px}
+  .space-switcher button{border:0;background:none;padding:7px 12px;border-radius:10px;font-size:12px;font-weight:800;color:var(--text-muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .space-switcher button:hover{color:var(--ink);background:var(--surface)}
+  .space-switcher button.active{background:var(--pastel-pink);color:var(--ink);box-shadow:0 1px 3px var(--shadow-soft)}
+  .nav-count{font-size:10px;background:var(--surface);padding:1px 6px;border-radius:999px;color:var(--ink)}
 
-  .events-section{padding-top:32px}
+  .back-bar{padding-top:18px}
+  .back-home{border:1px solid var(--border);background:var(--surface);border-radius:11px;padding:7px 13px;font-size:12px;font-weight:700;color:var(--text-secondary)}
+  .back-home:hover{background:var(--surface-pink);color:var(--ink)}
+
+  .home-hub{padding-top:32px}
+  .hub-hero{max-width:680px;margin-bottom:26px}
+  .hub-subtitle{font-size:14px;color:var(--text-muted);line-height:1.65;margin:10px 0 0}
+  .tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+  .feature-tile{text-align:left;display:flex;flex-direction:column;justify-content:space-between;gap:12px;padding:24px;border-radius:24px;border:2px solid var(--border);background:var(--surface);box-shadow:0 10px 26px var(--shadow-soft);transition:transform .14s ease,border-color .15s ease,box-shadow .15s ease}
+  .feature-tile:hover{transform:translateY(-3px);box-shadow:0 14px 34px var(--shadow)}
+  .tile-timer{background:linear-gradient(160deg,var(--surface) 45%,var(--surface-pink));border-color:var(--pastel-pink)}
+  .tile-timer:hover{border-color:var(--rose-ink)}
+  .tile-progress{background:linear-gradient(160deg,var(--surface) 45%,var(--surface-soft));border-color:var(--pastel-apricot)}
+  .tile-progress:hover{border-color:var(--border-strong)}
+  .tile-roulette{background:linear-gradient(160deg,var(--surface) 45%,var(--surface-green));border-color:var(--pastel-green)}
+  .tile-roulette:hover{border-color:var(--green-ink)}
+  .tile-top{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%}
+  .tile-icon{width:52px;height:52px;border-radius:16px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;font-size:28px;box-shadow:0 4px 10px var(--shadow-soft)}
+  .tile-badge{font-size:11px;font-weight:800;padding:5px 11px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)}
+  .feature-tile h2{font-size:24px;font-weight:800;letter-spacing:-.6px;margin:4px 0 0}
+  .tile-story{font-size:13px;font-weight:800;color:var(--rose-ink);margin:0;line-height:1.45}
+  .tile-roulette .tile-story{color:var(--green-ink)}
+  .tile-desc{font-size:12px;color:var(--text-muted);line-height:1.65;margin:0;flex:1}
+  .tile-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .tile-chips span{font-size:11px;font-weight:700;padding:4px 9px;border-radius:9px;background:var(--surface);border:1px solid var(--border);color:var(--ink)}
+  .tile-cta{font-size:12px;font-weight:800;color:var(--ink);margin-top:6px;display:inline-flex;align-items:center;gap:6px}
+
+  .happening-now{margin-top:34px;padding:24px;border-radius:24px;background:var(--surface);border:1px solid var(--border)}
+  .happening-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+  .happening-header h3{font-size:18px;font-weight:800;margin:0;display:flex;align-items:center;gap:9px}
+  .pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--green-ink);display:inline-block}
+  .text-link{border:0;background:none;font-size:12px;font-weight:800;color:var(--rose-ink)}
+  .small-btn{padding:7px 11px;font-size:11px;font-weight:700}
+  .started-by{font-size:11px;color:var(--text-muted)}
+  .timer-pill{font-size:11px;font-weight:800;background:var(--surface-soft);border:1px solid var(--border);padding:2px 8px;border-radius:999px;color:var(--text-secondary)}
+
+  .roulette-page{padding-top:24px}
+  .roulette-surface{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:24px;max-width:640px}
+  .active-playtime{margin-top:32px}
+  .active-playtime h2{font-size:20px;margin-bottom:14px}
+
+  .eyebrow{font-size:10px;letter-spacing:2px;font-weight:600;color:var(--text-muted);display:flex;align-items:center;gap:8px;margin:0 0 12px}
+
+  .events-section{padding-top:24px}
   .section-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:22px}
   h2{font-size:24px;font-weight:800;letter-spacing:-.7px;margin:0}
   .heading-dot{color:var(--rose-ink)}
@@ -278,7 +536,7 @@
   .event-list{display:flex;flex-direction:column;gap:28px;margin-top:22px}
   .event-card{min-width:0}
   .event-top{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px;margin-bottom:6px}
-  .event-identity{display:flex;gap:10px;align-items:baseline;min-width:0}
+  .event-identity{display:flex;gap:10px;align-items:baseline;min-width:0;flex-wrap:wrap}
   .event-emoji{flex-shrink:0;font-size:25px;line-height:1}
   .event-identity h3{font-size:20px;line-height:1.4;font-weight:800;letter-spacing:-.2px;margin:0;overflow-wrap:anywhere}
   .event-bottom{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-top:5px}
@@ -315,7 +573,7 @@
   .loading-ring{height:20px;width:20px;border:2px solid var(--border);border-top-color:var(--rose-ink);border-radius:50%;animation:spin 1s linear infinite;border-color:var(--pastel-peach)}
   @keyframes spin{to{transform:rotate(360deg)}
   }
-  .error-banner{padding:15px;border:1px solid var(--border);background:var(--danger-soft);color:var(--danger);font-size:13px;display:flex;align-items:center;justify-content:space-between;border-radius:7px;margin-bottom:16px;gap:15px;border-color:var(--danger-border)}
+  .error-banner{padding:15px;border:1px solid var(--border);background:var(--danger-soft);color:var(--danger);font-size:13px;display:flex;align-items:center;justify-content:space-between;border-radius:7px;margin:16px 0 0;gap:15px;border-color:var(--danger-border)}
   .error-banner button{background:none;border:0;text-decoration:underline;color:inherit;white-space:nowrap}
   dialog{border:1px solid var(--border);border-radius:24px;color:var(--ink);background:var(--surface);padding:30px;width:min(540px,calc(100% - 30px));max-height:90dvh;box-shadow:0 20px 90px var(--shadow)}
   dialog::backdrop{background:var(--backdrop);backdrop-filter:blur(4px)}
@@ -362,16 +620,18 @@
   @media(min-width:1500px){.app-shell{max-width:1220px}
   }
   @media(max-width:950px){.app-shell{padding:0 34px}
-
-  .toolbar{gap:10px}
-  .list-tools{gap:5px}
-  .search input{width:85px}
+    .tile-grid{grid-template-columns:1fr}
+    .toolbar{gap:10px}
+    .list-tools{gap:5px}
+    .search input{width:85px}
   }
 
   @media(max-width:680px){
     .app-shell{padding:0 18px}
     .brand-mark{width:28px;height:32px;font-size:17px}
-    .eyebrow{font-size:8px;letter-spacing:1.7px;margin-bottom:18px}
+    .space-switcher{order:3;width:100%;justify-content:space-between}
+    .space-switcher button{flex:1;justify-content:center;padding:7px 6px;font-size:11px}
+    .eyebrow{font-size:8px;letter-spacing:1.7px;margin-bottom:12px}
     h2{font-size:19px;letter-spacing:-.6px}
     .toolbar{flex-wrap:wrap;gap:10px;margin-bottom:14px}
     .event-list{gap:24px;margin-top:18px}
@@ -393,7 +653,6 @@
     .dialog-footer .secondary{padding:11px}
     .color-picker{gap:11px}
     .toast{font-size:11px;width:max-content;padding:13px 17px}
-    .topbar{height:64px}
     .brand{font-size:18px;gap:8px}
     .header-right{gap:8px}
     .settings-button{padding:9px}
@@ -405,7 +664,7 @@
     .section-heading p{font-size:11px;margin-top:8px;max-width:none}
     .add-button{font-size:11px;padding:12px;gap:5px}
     .add-button>span{font-size:18px}
-    .tabs{width:100%;flex:none}
+    .tabs{width:100%;flex:none;overflow-x:auto}
     .tabs button{flex:1;padding:7px 8px;font-size:11px;min-height:36px}
     .list-tools{width:100%;gap:12px;justify-content:space-between}
     .search{flex:1;min-width:0}
@@ -413,7 +672,7 @@
     .list-tools select{max-width:125px;font-size:11px}
   }
 
-  @media(prefers-reduced-motion:reduce){.progress-fill{transition:none}
+  @media(prefers-reduced-motion:reduce){.progress-fill,.feature-tile{transition:none}
   .loading-ring{animation:none}
   }
 

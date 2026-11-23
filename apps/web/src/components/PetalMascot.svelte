@@ -125,10 +125,10 @@
   const isEvening = $derived(hour >= 17 && hour < 20 && !napping);
   const isNight = $derived(hour >= 20 || hour < 4 || napping);
   const energyColor = $derived(
-    napping || fatigue >= 78 ? 'var(--plum)'
-      : fatigue >= 52 ? 'var(--amber)'
-      : fatigue >= 28 ? 'var(--coral)'
-      : 'var(--mint)',
+    napping || fatigue >= 78 ? 'var(--pastel-lavender)'
+      : fatigue >= 52 ? 'var(--pastel-apricot)'
+      : fatigue >= 28 ? 'var(--pastel-pink)'
+      : 'var(--pastel-green)',
   );
   const greetingText = $derived(
     hour < 4 || hour >= 20 ? 'Bedtime soon'
@@ -197,7 +197,7 @@
     const item: ParticleState = {
       id: nextParticleId,
       kind,
-      fill: kind === 'star' ? (Math.random() > 0.5 ? '#FFD166' : '#55C29A') : '#FF6B8B',
+      fill: kind === 'star' ? (Math.random() > 0.5 ? '#f9e4af' : '#d2e7b9') : '#f4b8b1',
       x,
       y,
       vx: kind === 'zzz' ? 12 + Math.random() * 10 : Math.cos(angle) * speed,
@@ -577,13 +577,13 @@
       void (
         yw > 0.14 ? (
           mouthD = `M ${-(5.5 + yw * 4.5)} 25 A ${(5.5 + yw * 4.5).toFixed(1)} ${(3 + yw * 10).toFixed(1)} 0 1 0 ${(5.5 + yw * 4.5)} 25 A ${(5.5 + yw * 4.5).toFixed(1)} ${(3 + yw * 10).toFixed(1)} 0 1 0 ${-(5.5 + yw * 4.5)} 25 Z`,
-          mouthFill = '#3B1E1B'
+          mouthFill = '#665c55'
         ) : pokeTimer > 0.08 ? (
           mouthD = 'M -4.5 26 A 4.5 4.5 0 1 0 4.5 26 A 4.5 4.5 0 1 0 -4.5 26 Z',
-          mouthFill = '#3B1E1B'
+          mouthFill = '#665c55'
         ) : celebrateTimer > 0.2 || petTimer > 0.2 ? (
           mouthD = 'M -9.5 22 Q 0 24 9.5 22 C 8.5 34.5 -8.5 34.5 -9.5 22 Z',
-          mouthFill = '#8A2824'
+          mouthFill = '#b86d6f'
         ) : napping ? (
           mouthD = 'M -5 25 Q 0 28 5 25',
           mouthFill = 'none'
@@ -653,47 +653,47 @@
           <ellipse cx="0" cy="0" rx="17.5" ry="22.5" />
         </clipPath>
         <radialGradient id={petalGradId} cx="42%" cy="30%" r="70%">
-          <stop offset="0%" stop-color="#FF7F68" />
-          <stop offset="65%" stop-color="#F0644E" />
-          <stop offset="100%" stop-color="#DF4D38" />
+          <stop offset="0%" stop-color="#fbe1dd" />
+          <stop offset="65%" stop-color="#f4b8b1" />
+          <stop offset="100%" stop-color="#e7a49c" />
         </radialGradient>
         <radialGradient id={sproutGradId} cx="42%" cy="30%" r="70%">
-          <stop offset="0%" stop-color="#FF957D" />
-          <stop offset="100%" stop-color="#F0644E" />
+          <stop offset="0%" stop-color="#fbe3df" />
+          <stop offset="100%" stop-color="#f4b8b1" />
         </radialGradient>
         <radialGradient id={haloGradId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#FFE680" stop-opacity="0.7" />
-          <stop offset="70%" stop-color="#FFD166" stop-opacity="0.22" />
-          <stop offset="100%" stop-color="#FFD166" stop-opacity="0" />
+          <stop offset="0%" stop-color="#fefbc0" stop-opacity="0.7" />
+          <stop offset="70%" stop-color="#f9e4af" stop-opacity="0.22" />
+          <stop offset="100%" stop-color="#f9e4af" stop-opacity="0" />
         </radialGradient>
       </defs>
 
-      <ellipse cx={shadowCx} cy="198" rx={shadowRx} ry="12" fill="#6D5045" opacity={shadowOpacity} />
+      <ellipse cx={shadowCx} cy="198" rx={shadowRx} ry="12" fill="#755747" opacity={shadowOpacity} />
       <circle cx="160" cy="122" r="95" fill={`url(#${haloGradId})`} opacity={radiantOpacity} />
 
       <g transform={rootTransform}>
         {#if stage.stage === 2}
-          <path d="M -28 24 C -62 12 -74 34 -54 48 C -38 54 -22 42 -20 30 Z" fill="#55C29A" stroke="#2C221F" stroke-width="3.5" stroke-linejoin="round" transform={leafLTransform} />
-          <path d="M 28 24 C 62 12 74 34 54 48 C 38 54 22 42 20 30 Z" fill="#55C29A" stroke="#2C221F" stroke-width="3.5" stroke-linejoin="round" transform={leafRTransform} />
+          <path d="M -28 24 C -62 12 -74 34 -54 48 C -38 54 -22 42 -20 30 Z" fill="#d2e7b9" stroke="#493f3c" stroke-width="3.5" stroke-linejoin="round" transform={leafLTransform} />
+          <path d="M 28 24 C 62 12 74 34 54 48 C 38 54 22 42 20 30 Z" fill="#d2e7b9" stroke="#493f3c" stroke-width="3.5" stroke-linejoin="round" transform={leafRTransform} />
         {/if}
 
         {#if stage.stage === 4}
           <g opacity="0.92" transform={haloTransform}>
             {#each [0, 1, 2, 3, 4] as idx (idx)}
               {@const rad = (-90 + 36 + idx * 72) * Math.PI / 180}
-              <circle cx={(Math.cos(rad) * 57).toFixed(1)} cy={(Math.sin(rad) * 57).toFixed(1)} r="24" fill="#F9E4AF" stroke="#2C221F" stroke-width="3" />
+              <circle cx={(Math.cos(rad) * 57).toFixed(1)} cy={(Math.sin(rad) * 57).toFixed(1)} r="24" fill="#f9e4af" stroke="#493f3c" stroke-width="3" />
             {/each}
           </g>
         {/if}
 
         <g>
           {#if stage.stage === 1}
-            <path d={budD} fill="#2C221F" stroke="#2C221F" stroke-width="10" stroke-linejoin="round" />
+            <path d={budD} fill="#493f3c" stroke="#493f3c" stroke-width="10" stroke-linejoin="round" />
           {:else}
-            <circle cx="0" cy="0" r="44" fill="#2C221F" stroke="#2C221F" stroke-width="10" />
+            <circle cx="0" cy="0" r="44" fill="#493f3c" stroke="#493f3c" stroke-width="10" />
             {#each Array.from(petalShapes) as p, i (i)}
               {#if p.visible}
-                <ellipse cx="0" cy="0" rx={p.rx} ry={p.ry} transform={p.transform} fill="#2C221F" stroke="#2C221F" stroke-width="10" />
+                <ellipse cx="0" cy="0" rx={p.rx} ry={p.ry} transform={p.transform} fill="#493f3c" stroke="#493f3c" stroke-width="10" />
               {/if}
             {/each}
           {/if}
@@ -714,35 +714,35 @@
         </g>
 
         {#if stage.stage === 1}
-          <path d="M 0 -43 C -8 -72 -34 -76 -36 -56 C -36 -40 -12 -38 0 -43 Z" fill="#55C29A" stroke="#2C221F" stroke-width="3.5" stroke-linejoin="round" transform={sproutLTransform} />
-          <path d="M 0 -43 C 8 -72 34 -76 36 -56 C 36 -40 12 -38 0 -43 Z" fill="#6ED4AD" stroke="#2C221F" stroke-width="3.5" stroke-linejoin="round" transform={sproutRTransform} />
+          <path d="M 0 -43 C -8 -72 -34 -76 -36 -56 C -36 -40 -12 -38 0 -43 Z" fill="#d2e7b9" stroke="#493f3c" stroke-width="3.5" stroke-linejoin="round" transform={sproutLTransform} />
+          <path d="M 0 -43 C 8 -72 34 -76 36 -56 C 36 -40 12 -38 0 -43 Z" fill="#e2f0cb" stroke="#493f3c" stroke-width="3.5" stroke-linejoin="round" transform={sproutRTransform} />
         {/if}
 
         {#if stage.stage === 4}
-          <path d="M -16 -72 L -20 -90 L -7 -80 L 0 -96 L 7 -80 L 20 -90 L 16 -72 Z" fill="#FFD166" stroke="#2C221F" stroke-width="3.2" stroke-linejoin="round" transform={crownTransform} />
+          <path d="M -16 -72 L -20 -90 L -7 -80 L 0 -96 L 7 -80 L 20 -90 L 16 -72 Z" fill="#f9e4af" stroke="#493f3c" stroke-width="3.2" stroke-linejoin="round" transform={crownTransform} />
         {/if}
 
-        <ellipse cx="-35" cy="17" rx="10" ry="6" fill="#FF98A0" opacity={cheekOpacity} />
-        <ellipse cx="35" cy="17" rx="10" ry="6" fill="#FF98A0" opacity={cheekOpacity} />
+        <ellipse cx="-35" cy="17" rx="10" ry="6" fill="#e79d9a" opacity={cheekOpacity} />
+        <ellipse cx="35" cy="17" rx="10" ry="6" fill="#e79d9a" opacity={cheekOpacity} />
 
         <g transform={faceTransform}>
           {#each [-20.5, 20.5] as eyeX (eyeX)}
             <g transform={`translate(${eyeX}, -2)`}>
               {#if happyEyeActive}
-                <path d="M -13 4 Q 0 -10 13 4" fill="none" stroke="#2C221F" stroke-width="3.8" stroke-linecap="round" />
+                <path d="M -13 4 Q 0 -10 13 4" fill="none" stroke="#493f3c" stroke-width="3.8" stroke-linecap="round" />
               {:else}
-                <ellipse cx="0" cy="0" rx="18" ry="23" fill="#FFFFFF" stroke="#2C221F" stroke-width="3.6" />
+                <ellipse cx="0" cy="0" rx="18" ry="23" fill="#FFFFFF" stroke="#493f3c" stroke-width="3.6" />
                 <g clip-path={`url(#${clipEyeId})`}>
                   <g transform={pupilTransform}>
-                    <ellipse cx="0" cy="0" rx="11.5" ry="15" fill="#1E1715" />
+                    <ellipse cx="0" cy="0" rx="11.5" ry="15" fill="#493f3c" />
                     <circle cx="-4" cy="-5.2" r="3.8" fill="#FFFFFF" />
                     <circle cx="4.2" cy="4.6" r="1.8" fill="#FFFFFF" opacity="0.82" />
                   </g>
-                  <path d={eyelidD} fill="#EE604A" stroke="#2C221F" stroke-width="3.2" stroke-linecap="round" />
-                  <path d="M -15 4 Q 0 11 15 4" fill="none" stroke="#2C221F" stroke-width="3.2" stroke-linecap="round" opacity={sleepLidOpacity} />
+                  <path d={eyelidD} fill="#f0b1a9" stroke="#493f3c" stroke-width="3.2" stroke-linecap="round" />
+                  <path d="M -15 4 Q 0 11 15 4" fill="none" stroke="#493f3c" stroke-width="3.2" stroke-linecap="round" opacity={sleepLidOpacity} />
                 </g>
-                <ellipse cx="0" cy="0" rx="18" ry="23" fill="none" stroke="#2C221F" stroke-width="3.6" />
-                <g stroke="#2C221F" stroke-width="2.4" stroke-linecap="round" fill="none">
+                <ellipse cx="0" cy="0" rx="18" ry="23" fill="none" stroke="#493f3c" stroke-width="3.6" />
+                <g stroke="#493f3c" stroke-width="2.4" stroke-linecap="round" fill="none">
                   {#each Array.from(lashPaths) as lp, li (li)}
                     <path d={lp} />
                   {/each}
@@ -750,7 +750,7 @@
               {/if}
             </g>
           {/each}
-          <path d={mouthD} fill={mouthFill} stroke="#2C221F" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
+          <path d={mouthD} fill={mouthFill} stroke="#493f3c" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
         </g>
       </g>
 
@@ -759,11 +759,11 @@
         {#each Array.from(particles) as p (p.id)}
           <g transform={p.transform} opacity={p.opacity}>
             {#if p.kind === 'heart'}
-              <path d="M0,3 C-4,-2 -9,2 -5,7 L0,12 L5,7 C9,2 4,-2 0,3 Z" fill="#FF6B8B" stroke="#2C221F" stroke-width="1.5" />
+              <path d="M0,3 C-4,-2 -9,2 -5,7 L0,12 L5,7 C9,2 4,-2 0,3 Z" fill="#f4b8b1" stroke="#493f3c" stroke-width="1.5" />
             {:else if p.kind === 'star'}
-              <path d="M0,-8 L2.2,-2.2 L8,0 L2.2,2.2 L0,8 L-2.2,2.2 L-8,0 L-2.2,-2.2 Z" fill={p.fill} stroke="#2C221F" stroke-width="1.3" />
+              <path d="M0,-8 L2.2,-2.2 L8,0 L2.2,2.2 L0,8 L-2.2,2.2 L-8,0 L-2.2,-2.2 Z" fill={p.fill} stroke="#493f3c" stroke-width="1.3" />
             {:else}
-              <text x="0" y="0" font-size="15" font-weight="800" fill="#7E78D2" stroke="#FFFFFF" stroke-width="2.5" paint-order="stroke">z</text>
+              <text x="0" y="0" font-size="15" font-weight="800" fill="#8c81a6" stroke="#FFFFFF" stroke-width="2.5" paint-order="stroke">z</text>
             {/if}
           </g>
         {/each}
@@ -821,18 +821,18 @@
     position: relative;
     overflow: hidden;
     border-radius: 30px;
-    border: 2px solid color-mix(in srgb, var(--coral) 22%, var(--border));
-    background: linear-gradient(180deg, #fff8ef 0%, #ffefe2 100%);
+    border: 2px solid color-mix(in srgb, var(--pastel-pink) 55%, var(--border));
+    background: linear-gradient(180deg, var(--canvas) 0%, var(--surface-pink) 100%);
     padding: 16px 18px 14px;
     box-shadow: 0 12px 28px var(--shadow-soft);
     user-select: none;
     transition: background 0.6s ease;
   }
   .petal-stage.is-evening {
-    background: linear-gradient(180deg, #ffe8d6 0%, #ffe0d2 100%);
+    background: linear-gradient(180deg, #fff6ec 0%, #fceee4 100%);
   }
   .petal-stage.is-night {
-    background: linear-gradient(180deg, #eee8fa 0%, #f9ece7 100%);
+    background: linear-gradient(180deg, var(--surface-lavender) 0%, var(--surface-pink) 100%);
   }
   .sky-ambient {
     position: absolute;
@@ -847,7 +847,7 @@
     width: 110px;
     height: 110px;
     border-radius: 50%;
-    background: radial-gradient(circle, #ffe394 0%, rgba(255, 227, 148, 0) 72%);
+    background: radial-gradient(circle, var(--pastel-lemon) 0%, color-mix(in srgb, var(--pastel-lemon) 0%, transparent) 72%);
     opacity: 0.65;
     transition: opacity 0.6s ease;
   }
@@ -861,10 +861,10 @@
   }
   .is-evening .sky-stars { opacity: 0.3; }
   .is-night .sky-stars { opacity: 1; }
-  .star { position: absolute; font-size: 12px; color: #f8daae; }
+  .star { position: absolute; font-size: 12px; color: var(--pastel-apricot); }
   .s1 { top: 18px; left: 26px; }
   .s2 { top: 34px; right: 44px; font-size: 10px; }
-  .s3 { top: 60px; left: 56px; font-size: 9px; color: #c9bdf5; }
+  .s3 { top: 60px; left: 56px; font-size: 9px; color: var(--pastel-lavender); }
 
   .stage-header {
     position: relative;
@@ -907,9 +907,9 @@
     border: 1px solid rgba(73, 63, 60, 0.1);
   }
   .streak-pill {
-    background: var(--coral-soft);
-    color: var(--coral-ink);
-    border-color: color-mix(in srgb, var(--coral) 28%, transparent);
+    background: var(--surface-pink);
+    color: var(--rose-ink);
+    border-color: var(--pastel-pink);
     font-variant-numeric: tabular-nums;
   }
 
@@ -994,7 +994,7 @@
   .meter-track {
     height: 8px;
     border-radius: 999px;
-    background: #efe6dc;
+    background: color-mix(in srgb, var(--border) 35%, var(--surface));
     overflow: hidden;
   }
   .meter-fill {
@@ -1003,7 +1003,7 @@
     transition: width 0.4s ease, background-color 0.4s ease;
   }
   .growth-fill {
-    background: var(--mint);
+    background: var(--pastel-green);
   }
 
   .stage-footer {
@@ -1047,7 +1047,7 @@
   }
   .feel-chip.chosen {
     background: var(--surface);
-    color: var(--coral-ink);
+    color: var(--rose-ink);
     box-shadow: 0 1px 3px var(--shadow-soft);
   }
   .rest-pill {
@@ -1061,9 +1061,9 @@
   }
   .rest-pill:hover:not(:disabled) { transform: translateY(-1px); }
   .rest-pill.is-napping {
-    background: #ece8fa;
-    border-color: var(--plum);
-    color: #4f489e;
+    background: var(--surface-lavender);
+    border-color: var(--pastel-lavender);
+    color: var(--lavender-ink);
   }
 
   @media (max-width: 600px) {

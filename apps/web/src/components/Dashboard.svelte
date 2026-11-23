@@ -706,11 +706,11 @@
   .goal-wrap{position:relative;display:flex}
   .goal-card{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:6px;padding:12px;border-radius:20px;border:1.5px solid rgba(73,63,60,.12);background:var(--goal-color);text-align:left;transition:transform .12s ease,background-color .2s ease,border-color .2s ease,opacity .2s ease}
   .goal-card:hover:not(:disabled){transform:translateY(-2px)}
-  .goal-card.is-done{background:var(--surface);border-color:var(--mint);opacity:.86}
+  .goal-card.is-done{background:var(--surface);border-color:var(--pastel-green);opacity:.86}
   .goal-top{display:flex;align-items:center;justify-content:space-between}
   .goal-emoji{font-size:20px;line-height:1}
   .goal-check{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:rgba(255,255,255,.78);color:var(--ink)}
-  .goal-card.is-done .goal-check{background:var(--mint);color:#fff}
+  .goal-card.is-done .goal-check{background:var(--pastel-green);color:var(--green-ink)}
   .goal-name{font-size:13px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
   .goal-card.is-done .goal-name{text-decoration:line-through;opacity:.65}
   .goal-reward{font-size:10px;font-weight:700;color:var(--text-secondary)}
@@ -718,7 +718,8 @@
   .goal-add-form{display:grid;grid-template-columns:56px 1fr auto auto auto;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:10px}
   .goal-add-form input,.goal-add-form select{border:1px solid var(--border-strong);border-radius:10px;background:var(--surface-soft);padding:8px 10px;font-size:12px;color:var(--ink);min-width:0}
   .goal-emoji-in{text-align:center;font-size:16px}
-  .goal-add-submit{border:0;border-radius:10px;background:var(--coral);color:#fff;padding:9px 14px;font-size:12px;font-weight:800}
+  .goal-add-submit{border:1px solid var(--primary-border);border-radius:10px;background:var(--primary);color:var(--ink);padding:9px 14px;font-size:12px;font-weight:800}
+  .goal-add-submit:hover:not(:disabled){background:var(--primary-hover)}
   .goal-error{margin:0;font-size:11px;color:var(--danger)}
 
   .tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;width:100%}
